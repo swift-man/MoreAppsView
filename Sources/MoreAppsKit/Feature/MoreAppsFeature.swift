@@ -2,6 +2,8 @@ import ComposableArchitecture
 import Foundation
 
 struct MoreAppsFeature: Reducer {
+    static let maximumPendingEventCount = 100
+
     @ObservableState
     struct State: Equatable, Sendable {
         var sourceApps: [MoreApp] = []
@@ -209,5 +211,10 @@ struct MoreAppsFeature: Reducer {
         state.pendingEvents.append(
             EventEnvelope(id: state.nextEventID, event: event)
         )
+        if state.pendingEvents.count > Self.maximumPendingEventCount {
+            state.pendingEvents.removeFirst(
+                state.pendingEvents.count - Self.maximumPendingEventCount
+            )
+        }
     }
 }

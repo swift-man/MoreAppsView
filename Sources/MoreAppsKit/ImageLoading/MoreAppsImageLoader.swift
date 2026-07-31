@@ -27,59 +27,219 @@ public enum MoreAppsImageLoadingError: Error, Equatable, LocalizedError, Sendabl
 }
 
 private actor MoreAppsImageRepository {
-    private let session: Session
-    private let cache = NSCache<NSURL, NSData>()
-    private var inFlight: [URL: Task<Data, Error>] = [:]
+    private static let defaultMaximumResponseByteCount = 8 * 1_024 * 1_024
 
-    init(sessionConfiguration: URLSessionConfiguration) {
+    private struct InFlightRequest {
+        let id: UInt
+        let generation: UInt
+        let task: Task<Data, Error>
+    }
+
+    private let session: Session
+    private let maximumResponseByteCount: Int
+    private var inFlight: [URL: InFlightRequest] = [:]
+    private var cacheGeneration: UInt = 0
+    private var nextRequestID: UInt = 0
+
+    init(
+        sessionConfiguration: URLSessionConfiguration,
+        maximumResponseByteCount: Int = MoreAppsImageRepository
+            .defaultMaximumResponseByteCount
+    ) {
         self.session = Session(configuration: sessionConfiguration)
+        self.maximumResponseByteCount = maximumResponseByteCount
     }
 
     func data(for url: URL) async throws -> Data {
-        if let cached = cache.object(forKey: url as NSURL) {
-            return cached as Data
+        if let request = inFlight[url] {
+            return try await value(for: request)
         }
 
-        if let task = inFlight[url] {
-            return try await task.value
+        let generation = cacheGeneration
+        nextRequestID &+= 1
+        let requestID = nextRequestID
+        let task = Task<Data, Error> {
+            try await Self.downloadData(
+                from: url,
+                using: session,
+                maximumResponseByteCount: maximumResponseByteCount
+            )
         }
 
-        let task = Task<Data, Error> { [session] in
-            let response = await session
-                .request(url)
-                .validate(statusCode: 200..<300)
-                .serializingData()
-                .response
+        let request = InFlightRequest(
+            id: requestID,
+            generation: generation,
+            task: task
+        )
+        inFlight[url] = request
 
-            if let error = response.error {
-                throw MoreAppsImageLoadingError.network(
-                    message: error.localizedDescription
-                )
-            }
-
-            let mimeType = response.response?.mimeType
-            guard mimeType?.lowercased().hasPrefix("image/") == true else {
-                throw MoreAppsImageLoadingError.invalidMIMEType(mimeType)
-            }
-
-            guard let data = response.value else {
-                throw MoreAppsImageLoadingError.network(
-                    message: "The response did not contain a body."
-                )
-            }
+        do {
+            let data = try await value(for: request)
+            removeInFlightRequest(for: url, id: requestID)
             return data
+        } catch {
+            removeInFlightRequest(for: url, id: requestID)
+            throw error
         }
-
-        inFlight[url] = task
-        defer { inFlight[url] = nil }
-
-        let data = try await task.value
-        cache.setObject(data as NSData, forKey: url as NSURL)
-        return data
     }
 
     func removeAllCachedImages() {
-        cache.removeAllObjects()
+        cacheGeneration &+= 1
+        let tasks = inFlight.values.map(\.task)
+        inFlight.removeAll()
+        tasks.forEach { $0.cancel() }
+    }
+
+    private func value(for request: InFlightRequest) async throws -> Data {
+        do {
+            let data = try await request.task.value
+            guard request.generation == cacheGeneration else {
+                throw CancellationError()
+            }
+            return data
+        } catch {
+            guard request.generation == cacheGeneration else {
+                throw CancellationError()
+            }
+            throw error
+        }
+    }
+
+    private func removeInFlightRequest(for url: URL, id: UInt) {
+        guard inFlight[url]?.id == id else { return }
+        inFlight[url] = nil
+    }
+
+    private nonisolated static func downloadData(
+        from url: URL,
+        using session: Session,
+        maximumResponseByteCount: Int
+    ) async throws -> Data {
+        let request = session.streamRequest(url)
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let receiver = MoreAppsImageStreamReceiver(
+                    maximumResponseByteCount: maximumResponseByteCount,
+                    continuation: continuation
+                )
+                request.responseStream(
+                    on: receiver.queue
+                ) { stream in
+                    receiver.receive(stream)
+                }
+            }
+        } onCancel: {
+            request.cancel()
+        }
+    }
+}
+
+private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
+    let queue = DispatchQueue(
+        label: "com.moreappskit.image-stream-receiver"
+    )
+
+    private let maximumResponseByteCount: Int
+    private let lock = NSLock()
+    private var data = Data()
+    private var continuation: CheckedContinuation<Data, Error>?
+
+    init(
+        maximumResponseByteCount: Int,
+        continuation: CheckedContinuation<Data, Error>
+    ) {
+        self.maximumResponseByteCount = maximumResponseByteCount
+        self.continuation = continuation
+    }
+
+    func receive(_ stream: DataStreamRequest.Stream<Data, Never>) {
+        switch stream.event {
+        case let .stream(result):
+            guard case let .success(chunk) = result else { return }
+            append(chunk, cancellationToken: stream)
+
+        case let .complete(completion):
+            finish(with: completion)
+        }
+    }
+
+    private func append(
+        _ chunk: Data,
+        cancellationToken stream: DataStreamRequest.Stream<Data, Never>
+    ) {
+        lock.lock()
+        guard let continuation else {
+            lock.unlock()
+            return
+        }
+        guard chunk.count <= maximumResponseByteCount - data.count else {
+            self.continuation = nil
+            lock.unlock()
+            stream.cancel()
+            continuation.resume(
+                throwing: MoreAppsImageLoadingError.network(
+                    message: "Image response exceeded the "
+                        + "\(maximumResponseByteCount)-byte limit."
+                )
+            )
+            return
+        }
+        data.append(chunk)
+        lock.unlock()
+    }
+
+    private func finish(
+        with completion: DataStreamRequest.Completion
+    ) {
+        lock.lock()
+        guard let continuation else {
+            lock.unlock()
+            return
+        }
+        self.continuation = nil
+        let data = data
+        lock.unlock()
+
+        if let error = completion.error {
+            continuation.resume(
+                throwing: MoreAppsImageLoadingError.network(
+                    message: error.localizedDescription
+                )
+            )
+            return
+        }
+
+        guard let response = completion.response,
+              (200..<300).contains(response.statusCode) else {
+            let statusCode = completion.response
+                .map { String($0.statusCode) } ?? "missing"
+            continuation.resume(
+                throwing: MoreAppsImageLoadingError.network(
+                    message: "Unexpected HTTP status: \(statusCode)."
+                )
+            )
+            return
+        }
+
+        let mimeType = response.mimeType
+        guard mimeType?.lowercased().hasPrefix("image/") == true else {
+            continuation.resume(
+                throwing: MoreAppsImageLoadingError.invalidMIMEType(mimeType)
+            )
+            return
+        }
+
+        guard !data.isEmpty else {
+            continuation.resume(
+                throwing: MoreAppsImageLoadingError.network(
+                    message: "The response did not contain a body."
+                )
+            )
+            return
+        }
+
+        continuation.resume(returning: data)
     }
 }
 
@@ -94,6 +254,8 @@ public final class MoreAppsImageLoader {
 
     private let repository: MoreAppsImageRepository
     private let imageCache = NSCache<NSURL, UIImage>()
+    private let imageDecoder: @Sendable (Data) async -> UIImage?
+    private var cacheGeneration: UInt = 0
 
     /// Creates an image loader.
     ///
@@ -104,6 +266,23 @@ public final class MoreAppsImageLoader {
         self.repository = MoreAppsImageRepository(
             sessionConfiguration: sessionConfiguration
         )
+        self.imageDecoder = { data in
+            await Task.detached(priority: .userInitiated) {
+                UIImage(data: data, scale: 1)
+            }.value
+        }
+    }
+
+    init(
+        sessionConfiguration: URLSessionConfiguration,
+        maximumResponseByteCount: Int = 8 * 1_024 * 1_024,
+        imageDecoder: @escaping @Sendable (Data) async -> UIImage?
+    ) {
+        self.repository = MoreAppsImageRepository(
+            sessionConfiguration: sessionConfiguration,
+            maximumResponseByteCount: maximumResponseByteCount
+        )
+        self.imageDecoder = imageDecoder
     }
 
     /// Returns a cached or downloaded image for a URL.
@@ -116,14 +295,19 @@ public final class MoreAppsImageLoader {
             return image
         }
 
+        let generation = cacheGeneration
         let data = try await repository.data(for: url)
         try Task.checkCancellation()
+        guard generation == cacheGeneration else {
+            throw CancellationError()
+        }
 
-        let image = await Task.detached(priority: .userInitiated) {
-            UIImage(data: data, scale: 1)
-        }.value
+        let image = await imageDecoder(data)
 
         try Task.checkCancellation()
+        guard generation == cacheGeneration else {
+            throw CancellationError()
+        }
         guard let image else {
             throw MoreAppsImageLoadingError.decodingFailed
         }
@@ -132,8 +316,9 @@ public final class MoreAppsImageLoader {
         return image
     }
 
-    /// Removes all cached image data and decoded images.
+    /// Removes all cached images and invalidates in-progress image work.
     public func removeAllCachedImages() async {
+        cacheGeneration &+= 1
         imageCache.removeAllObjects()
         await repository.removeAllCachedImages()
     }

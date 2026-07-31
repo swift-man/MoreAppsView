@@ -14,6 +14,8 @@ public final class MoreAppsView: UIView {
     /// Receives analytics-neutral interaction and loading events.
     ///
     /// MoreAppsKit does not collect, persist, or transmit these events itself.
+    /// Up to the 100 most recent events emitted before a handler is assigned
+    /// are retained and delivered when a handler becomes available.
     public var onEvent: ((MoreAppsEvent) -> Void)? {
         didSet { scheduleEventDeliveryIfNeeded() }
     }
@@ -147,9 +149,7 @@ public final class MoreAppsView: UIView {
         titleLabel.isHidden = !configuration.showsTitle
         titleLeadingConstraint.constant = configuration.contentInsets.leading
         titleTrailingConstraint.constant = -configuration.contentInsets.trailing
-        collectionTopToTitleConstraint.isActive = configuration.showsTitle
-        titleTopConstraint.isActive = configuration.showsTitle
-        collectionTopConstraint.isActive = !configuration.showsTitle
+        updateTitleLayoutConstraints()
         flowLayout.minimumInteritemSpacing = configuration.cardSpacing
         flowLayout.minimumLineSpacing = configuration.cardSpacing
         isHidden = configuration.hidesWhenEmpty && currentOrderedApps.isEmpty
@@ -233,9 +233,7 @@ public final class MoreAppsView: UIView {
             collectionHeightConstraint
         ]
         NSLayoutConstraint.activate(constraints)
-        titleTopConstraint.isActive = configuration.showsTitle
-        collectionTopToTitleConstraint.isActive = configuration.showsTitle
-        collectionTopConstraint.isActive = !configuration.showsTitle
+        updateTitleLayoutConstraints()
 
         registerForTraitChanges([
             UITraitHorizontalSizeClass.self,
@@ -319,6 +317,7 @@ public final class MoreAppsView: UIView {
 
     private func scheduleEventDeliveryIfNeeded() {
         guard eventDeliveryTask == nil,
+              onEvent != nil,
               !store.pendingEvents.isEmpty else {
             return
         }
@@ -328,8 +327,9 @@ public final class MoreAppsView: UIView {
             await Task.yield()
 
             while !Task.isCancelled,
-                  let envelope = self.store.pendingEvents.first {
-                self.onEvent?(envelope.event)
+                  let envelope = self.store.pendingEvents.first,
+                  let onEvent = self.onEvent {
+                onEvent(envelope.event)
                 self.store.send(.eventDelivered(envelope.id))
                 await Task.yield()
             }
@@ -338,6 +338,22 @@ public final class MoreAppsView: UIView {
             if !self.store.pendingEvents.isEmpty {
                 self.scheduleEventDeliveryIfNeeded()
             }
+        }
+    }
+
+    private func updateTitleLayoutConstraints() {
+        if configuration.showsTitle {
+            NSLayoutConstraint.deactivate([collectionTopConstraint])
+            NSLayoutConstraint.activate([
+                titleTopConstraint,
+                collectionTopToTitleConstraint
+            ])
+        } else {
+            NSLayoutConstraint.deactivate([
+                titleTopConstraint,
+                collectionTopToTitleConstraint
+            ])
+            NSLayoutConstraint.activate([collectionTopConstraint])
         }
     }
 

@@ -1,4 +1,5 @@
 import Testing
+import UIKit
 @testable import MoreAppsKit
 
 @MainActor
@@ -116,6 +117,42 @@ struct MoreAppsViewTests {
         #expect(cell.accessibilityLabel?.contains("Sample") == true)
         #expect(cell.accessibilityLabel?.contains("Subtitle") == true)
         #expect(cell.accessibilityHint?.isEmpty == false)
+    }
+
+    @Test
+    func testCardReuseClearsHighlightPresentation() {
+        let cell = MoreAppCardCell(frame: .zero)
+        cell.isHighlighted = true
+
+        cell.prepareForReuse()
+
+        #expect(cell.contentView.alpha == 1)
+        #expect(cell.contentView.transform == .identity)
+    }
+
+    @Test
+    func testEventsWaitForAHandlerBeforeDelivery() async {
+        let view = MoreAppsView()
+        view.setApps([TestFixtures.app(platforms: [.current])])
+        await Task.yield()
+
+        let collectionView = view.subviews
+            .compactMap { $0 as? UICollectionView }
+            .first!
+        view.collectionView(
+            collectionView,
+            willDisplay: UICollectionViewCell(),
+            forItemAt: IndexPath(item: 0, section: 0)
+        )
+        await Task.yield()
+
+        var events: [MoreAppsEvent] = []
+        view.onEvent = { events.append($0) }
+        for _ in 0..<5 {
+            await Task.yield()
+        }
+
+        #expect(events == [.impression(appID: "sample")])
     }
 }
 

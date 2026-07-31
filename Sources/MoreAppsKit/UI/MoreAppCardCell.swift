@@ -67,6 +67,8 @@ final class MoreAppCardCell: UICollectionViewCell {
         iconImageView.image = nil
         nameLabel.text = nil
         subtitleLabel.text = nil
+        contentView.alpha = 1
+        contentView.transform = .identity
         transform = .identity
         layer.zPosition = 0
     }

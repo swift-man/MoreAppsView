@@ -12,7 +12,8 @@ for remote JSON and image HTTP requests, and a
 
 ## Requirements
 
-- Swift 5.9 or newer
+- Xcode 26.0 or newer with the Swift 6.2 toolchain
+- Swift 5 language mode (`swift-tools-version: 5.9`)
 - iOS 26.0 or newer
 - tvOS 26.0 or newer
 - UIKit

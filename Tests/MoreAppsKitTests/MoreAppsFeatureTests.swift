@@ -557,6 +557,33 @@ struct MoreAppsFeatureTests {
         }
     }
 
+    @Test
+    func testPendingEventBacklogIsBounded() {
+        let apps = (0...MoreAppsFeature.maximumPendingEventCount).map { index in
+            TestFixtures.app(id: "app-\(index)")
+        }
+        var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+        state.apps = apps
+
+        let store = Store(initialState: state) {
+            MoreAppsFeature()
+        }
+
+        for app in apps {
+            store.send(.itemBecameVisible(appID: app.id))
+        }
+
+        #expect(
+            store.pendingEvents.count
+                == MoreAppsFeature.maximumPendingEventCount
+        )
+        #expect(store.pendingEvents.first?.id == 2)
+        #expect(
+            store.pendingEvents.last?.id
+                == MoreAppsFeature.maximumPendingEventCount + 1
+        )
+    }
+
     private func makeStore(
         app: MoreApp,
         recorder: OpenRecorder
