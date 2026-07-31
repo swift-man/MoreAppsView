@@ -1,0 +1,95 @@
+version: 1
+
+review:
+  include:
+    - "**/*.swift"
+    - "**/*.xcstrings"
+    - "Package.swift"
+    - "Samples/**/*.json"
+    - ".github/workflows/**/*.yml"
+    - ".github/workflows/**/*.yaml"
+    - ".reviewbot.yml"
+    - ".gitignore"
+    - "AGENTS.md"
+    - "CHANGELOG.md"
+    - "README.md"
+    - "VERSION.txt"
+    - "Sources/**/*.docc/**/*.md"
+
+  exclude:
+    # Dependency checkouts and build output
+    - "Pods/**"
+    - "Carthage/**"
+    - "Dependencies/**"
+    - ".accio/**"
+    - ".build/**"
+    - "DerivedData/**"
+    - "build/**"
+    - "dist/**"
+    - "node_modules/**"
+    - "vendor/**"
+    - ".swiftpm/xcode/**"
+    - "iOSInjectionProject/**"
+
+    # Xcode local and generated metadata
+    - "**/xcuserdata/**"
+    - "**/*.xcuserstate"
+    - "**/*.xcscmblueprint"
+    - "**/*.xccheckout"
+    - "**/*.moved-aside"
+    - "**/*.pbxuser"
+    - "**/*.mode1v3"
+    - "**/*.mode2v3"
+    - "**/*.perspectivev3"
+    - "**/*.hmap"
+    - "**/*.ipa"
+    - "**/*.dSYM"
+    - "**/*.dSYM.zip"
+
+    # Generated source files
+    - "**/Generated/**"
+    - "**/*.generated.swift"
+    - "**/*.pb.swift"
+    - "**/*.graphql.swift"
+    - "**/*+Generated.swift"
+
+    # Binary resources
+    - "Assets/**"
+    - "**/*.xcassets/**"
+    - "**/*.png"
+    - "**/*.jpg"
+    - "**/*.jpeg"
+    - "**/*.gif"
+    - "**/*.webp"
+    - "**/*.pdf"
+    - "**/*.mp3"
+    - "**/*.wav"
+    - "**/*.m4a"
+    - "**/*.caf"
+    - "**/*.aiff"
+    - "**/*.mp4"
+    - "**/*.mov"
+
+    # Resolved dependency and package-manager lock files
+    - "**/Package.resolved"
+    - "Podfile.lock"
+    - "package-lock.json"
+    - "yarn.lock"
+    - "pnpm-lock.yaml"
+
+    # Generated documentation output; source DocC remains reviewable.
+    - "docs/**"
+    - "*.doccarchive/**"
+    - "**/*.doccarchive/**"
+
+  always_review:
+    - ".reviewbot.yml"
+    - ".gitignore"
+    - "AGENTS.md"
+    - "CHANGELOG.md"
+    - "README.md"
+    - "VERSION.txt"
+    - "Package.swift"
+    - ".github/workflows/**/*.yml"
+    - ".github/workflows/**/*.yaml"
+    - "Sources/**/*.docc/**/*.md"
