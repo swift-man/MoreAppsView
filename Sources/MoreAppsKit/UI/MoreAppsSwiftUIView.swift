@@ -25,6 +25,7 @@ public struct MoreAppsSwiftUIView: UIViewRepresentable {
     }
 
     /// State retained across SwiftUI updates to avoid resetting impressions.
+    @MainActor
     public final class Coordinator {
         fileprivate var apps: [MoreApp] = []
         fileprivate var configuration: MoreAppsConfiguration?
