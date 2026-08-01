@@ -33,7 +33,7 @@ struct MoreAppsURLPolicyTests {
         #expect(
             MoreAppsURLPolicy.allowedDeepLink(
                 customURL,
-                allowedCustomSchemes: ["SAMPLE"]
+                allowedCustomSchemes: ["sample"]
             ) == customURL
         )
         #expect(

@@ -59,6 +59,10 @@ final class MoreAppCardCell: UICollectionViewCell {
         fatalError("MoreAppCardCell supports programmatic initialization only.")
     }
 
+    deinit {
+        imageTask?.cancel()
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         imageTask?.cancel()

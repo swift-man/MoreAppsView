@@ -290,6 +290,7 @@ public final class MoreAppsView: UIView {
             applySnapshot(apps: apps)
         }
 
+        // Keep this observation active so reducer-enqueued events schedule delivery.
         _ = store.pendingEvents
         scheduleEventDeliveryIfNeeded()
     }

@@ -131,6 +131,55 @@ struct MoreAppsViewTests {
     }
 
     @Test
+    func testCardDeinitCancelsImageTransport() async {
+        defer {
+            CellImageMockURLProtocol.onStartLoading = nil
+            CellImageMockURLProtocol.onStopLoading = nil
+        }
+        let starts = CellImageLifecycleCounter()
+        let stops = CellImageLifecycleCounter()
+        CellImageMockURLProtocol.onStartLoading = { starts.increment() }
+        CellImageMockURLProtocol.onStopLoading = { stops.increment() }
+
+        let sessionConfiguration = URLSessionConfiguration.ephemeral
+        sessionConfiguration.protocolClasses = [CellImageMockURLProtocol.self]
+        let imageLoader = MoreAppsImageLoader(
+            sessionConfiguration: sessionConfiguration
+        )
+        let app = MoreApp(
+            id: "image",
+            bundleIdentifier: "com.example.image",
+            name: "Image",
+            iconURL: URL(string: "https://example.com/icon.png"),
+            destinations: [],
+            sortOrder: 0
+        )
+        var cell: MoreAppCardCell? = MoreAppCardCell(frame: .zero)
+        weak let weakCell = cell
+        cell?.configure(
+            with: app,
+            configuration: .default,
+            imageLoader: imageLoader
+        )
+
+        let clock = ContinuousClock()
+        let startDeadline = clock.now.advanced(by: .seconds(1))
+        while starts.count == 0, clock.now < startDeadline {
+            await Task.yield()
+        }
+        #expect(starts.count == 1)
+
+        cell = nil
+
+        #expect(weakCell == nil)
+        let stopDeadline = clock.now.advanced(by: .seconds(1))
+        while stops.count == 0, clock.now < stopDeadline {
+            await Task.yield()
+        }
+        #expect(stops.count == 1)
+    }
+
+    @Test
     func testEventsWaitForAHandlerBeforeDelivery() async {
         let view = MoreAppsView()
         view.setApps([TestFixtures.app(platforms: [.current])])
@@ -167,5 +216,41 @@ private actor CountingProvider: MoreAppsProviding {
     func fetchApps() async throws -> [MoreApp] {
         count += 1
         return apps
+    }
+}
+
+private final class CellImageLifecycleCounter {
+    private let lock = NSLock()
+    private var value = 0
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func increment() {
+        lock.lock()
+        value += 1
+        lock.unlock()
+    }
+}
+
+private final class CellImageMockURLProtocol: URLProtocol {
+    static var onStartLoading: (() -> Void)?
+    static var onStopLoading: (() -> Void)?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.onStartLoading?()
+    }
+
+    override func stopLoading() {
+        Self.onStopLoading?()
     }
 }

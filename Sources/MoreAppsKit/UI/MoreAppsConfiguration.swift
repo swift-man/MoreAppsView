@@ -30,7 +30,13 @@ public struct MoreAppsConfiguration: Equatable {
     ///
     /// HTTPS Universal Links are always eligible. All non-HTTPS schemes are
     /// denied unless their scheme name appears in this set.
-    public var allowedCustomDeepLinkSchemes: Set<String>
+    public var allowedCustomDeepLinkSchemes: Set<String> {
+        didSet {
+            allowedCustomDeepLinkSchemes = Self.normalizedCustomSchemes(
+                allowedCustomDeepLinkSchemes
+            )
+        }
+    }
 
     /// The SF Symbol shown while an icon is unavailable.
     public var placeholderSystemImageName: String
@@ -74,10 +80,18 @@ public struct MoreAppsConfiguration: Equatable {
         self.contentInsets = contentInsets
         self.maximumNumberOfItems = maximumNumberOfItems
         self.showsSubtitle = showsSubtitle
-        self.allowedCustomDeepLinkSchemes = allowedCustomDeepLinkSchemes
+        self.allowedCustomDeepLinkSchemes = Self.normalizedCustomSchemes(
+            allowedCustomDeepLinkSchemes
+        )
         self.placeholderSystemImageName = placeholderSystemImageName
     }
 
     /// The default App Store-style card configuration.
     public static let `default` = MoreAppsConfiguration()
+
+    private static func normalizedCustomSchemes(
+        _ schemes: Set<String>
+    ) -> Set<String> {
+        Set(schemes.lazy.map { $0.lowercased() }.filter { !$0.isEmpty })
+    }
 }

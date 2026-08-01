@@ -15,10 +15,7 @@ enum MoreAppsURLPolicy {
             return allowedAppStoreURL(url) == nil ? url : nil
         }
 
-        let normalizedAllowedSchemes = Set(
-            allowedCustomSchemes.map { $0.lowercased() }
-        )
-        return normalizedAllowedSchemes.contains(scheme) ? url : nil
+        return allowedCustomSchemes.contains(scheme) ? url : nil
     }
 
     static func allowedAppStoreURL(_ url: URL) -> URL? {
