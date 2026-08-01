@@ -625,6 +625,72 @@ struct MoreAppsFeatureTests {
     }
 
     @Test
+    func testReplacingCatalogPreventsStaleAppStoreFallback() async {
+        let oldApp = TestFixtures.app()
+        let replacement = TestFixtures.app(
+            id: "replacement",
+            bundleIdentifier: "com.example.new"
+        )
+        var state = MoreAppsFeature.State(
+            maximumNumberOfItems: nil,
+            allowedCustomDeepLinkSchemes: ["sample"]
+        )
+        state.sourceApps = [oldApp]
+        state.apps = [oldApp]
+        let recorder = DeferredOpenRecorder()
+
+        let store = TestStore(initialState: state) {
+            MoreAppsFeature()
+        } withDependencies: {
+            $0.moreAppsEnvironment = .init(
+                platform: .iOS,
+                bundleIdentifier: nil
+            )
+            $0.moreAppsOpen = MoreAppsOpenClient { url in
+                await recorder.open(url)
+            }
+        }
+
+        await store.send(.selected(appID: oldApp.id)) {
+            $0.openingAppIDs = [oldApp.id]
+            $0.nextEventID = 1
+            $0.pendingEvents = [
+                .init(id: 1, event: .selected(appID: oldApp.id))
+            ]
+        }
+        await recorder.waitUntilFirstOpenStarts()
+
+        await store.send(.setApps([replacement])) {
+            $0.sourceApps = [replacement]
+            $0.apps = [replacement]
+            $0.openingAppIDs = []
+            $0.dataSessionID = 1
+        }
+
+        recorder.finishFirstOpen(with: false)
+        await store.finish()
+
+        #expect(recorder.openedURLs == [TestFixtures.deepLinkURL])
+    }
+
+    @Test
+    func testCancelledOpenClientDoesNotInvokeUnderlyingOpener() async {
+        let recorder = OpenRecorder(results: [true])
+        let client = MoreAppsOpenClient { url in
+            recorder.open(url)
+        }
+        let task = Task {
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+            return await client(TestFixtures.iOSStoreURL)
+        }
+
+        task.cancel()
+
+        #expect(await task.value == false)
+        #expect(recorder.openedURLs.isEmpty)
+    }
+
+    @Test
     func testChangingMaximumRestoresItemsFromTheSourceCatalog() async {
         let apps = [
             TestFixtures.app(id: "first", sortOrder: 0),
@@ -745,5 +811,35 @@ private final class OpenRecorder {
         openedURLs.append(url)
         guard !results.isEmpty else { return false }
         return results.removeFirst()
+    }
+}
+
+@MainActor
+private final class DeferredOpenRecorder {
+    private(set) var openedURLs: [URL] = []
+    private var firstOpenContinuation: CheckedContinuation<Bool, Never>?
+    private var firstOpenStartWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func open(_ url: URL) async -> Bool {
+        openedURLs.append(url)
+        guard openedURLs.count == 1 else { return true }
+
+        firstOpenStartWaiters.forEach { $0.resume() }
+        firstOpenStartWaiters.removeAll()
+        return await withCheckedContinuation { continuation in
+            firstOpenContinuation = continuation
+        }
+    }
+
+    func waitUntilFirstOpenStarts() async {
+        guard openedURLs.isEmpty else { return }
+        await withCheckedContinuation { continuation in
+            firstOpenStartWaiters.append(continuation)
+        }
+    }
+
+    func finishFirstOpen(with result: Bool) {
+        firstOpenContinuation?.resume(returning: result)
+        firstOpenContinuation = nil
     }
 }

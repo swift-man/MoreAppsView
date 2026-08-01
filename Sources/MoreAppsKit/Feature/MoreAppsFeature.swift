@@ -168,18 +168,24 @@ struct MoreAppsFeature: Reducer {
                 }
 
                 return .run { send in
-                    if let deepLinkURL,
-                       await openURL(deepLinkURL) {
-                        await send(
-                            .openFinished(
-                                dataSessionID: dataSessionID,
-                                appID: appID,
-                                outcome: .app
+                    guard !Task.isCancelled else { return }
+
+                    if let deepLinkURL {
+                        let didOpenDeepLink = await openURL(deepLinkURL)
+                        guard !Task.isCancelled else { return }
+                        if didOpenDeepLink {
+                            await send(
+                                .openFinished(
+                                    dataSessionID: dataSessionID,
+                                    appID: appID,
+                                    outcome: .app
+                                )
                             )
-                        )
-                        return
+                            return
+                        }
                     }
 
+                    guard !Task.isCancelled else { return }
                     guard let appStoreURL else {
                         await send(
                             .openFinished(
@@ -192,6 +198,7 @@ struct MoreAppsFeature: Reducer {
                     }
 
                     let didOpenStore = await openURL(appStoreURL)
+                    guard !Task.isCancelled else { return }
                     await send(
                         .openFinished(
                             dataSessionID: dataSessionID,

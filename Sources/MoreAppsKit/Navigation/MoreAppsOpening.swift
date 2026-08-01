@@ -40,7 +40,8 @@ struct MoreAppsOpenClient: Sendable {
     /// - Returns: `true` when the operation reports success.
     @MainActor
     func callAsFunction(_ url: URL) async -> Bool {
-        await openURL(url)
+        guard !Task.isCancelled else { return false }
+        return await openURL(url)
     }
 }
 
