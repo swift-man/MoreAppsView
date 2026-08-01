@@ -137,7 +137,7 @@ public final class MoreAppsView: UIView {
     }
 
     func update(configuration newConfiguration: MoreAppsConfiguration) {
-        guard !configuration.isEquivalent(to: newConfiguration) else {
+        guard configuration != newConfiguration else {
             return
         }
 

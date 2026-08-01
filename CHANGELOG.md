@@ -10,5 +10,6 @@
 - Bound remote catalog and decoded icon memory, enforce HTTPS redirects, and require
   host-approved custom deep-link schemes.
 - Ignore stale URL-opening results after a catalog session is replaced.
+- Compare presentation configurations through synthesized `Equatable` conformance.
 - Embed MoreAppsKit from UIKit or SwiftUI with Dynamic Type, VoiceOver, and tvOS focus support.
 - Start from iOS/tvOS integration samples backed by Swift Testing coverage.

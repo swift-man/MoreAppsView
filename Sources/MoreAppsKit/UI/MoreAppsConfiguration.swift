@@ -1,7 +1,7 @@
 import UIKit
 
 /// Visual and behavioral options for ``MoreAppsView``.
-public struct MoreAppsConfiguration {
+public struct MoreAppsConfiguration: Equatable {
     /// An optional title override. `nil` uses the package-localized title.
     public var title: String?
 
@@ -80,23 +80,4 @@ public struct MoreAppsConfiguration {
 
     /// The default App Store-style card configuration.
     public static let `default` = MoreAppsConfiguration()
-}
-
-extension MoreAppsConfiguration {
-    func isEquivalent(to other: Self) -> Bool {
-        title == other.title
-            && showsTitle == other.showsTitle
-            && hidesWhenEmpty == other.hidesWhenEmpty
-            && cardCornerRadius == other.cardCornerRadius
-            && cardSpacing == other.cardSpacing
-            && contentInsets.top == other.contentInsets.top
-            && contentInsets.leading == other.contentInsets.leading
-            && contentInsets.bottom == other.contentInsets.bottom
-            && contentInsets.trailing == other.contentInsets.trailing
-            && maximumNumberOfItems == other.maximumNumberOfItems
-            && showsSubtitle == other.showsSubtitle
-            && allowedCustomDeepLinkSchemes
-                == other.allowedCustomDeepLinkSchemes
-            && placeholderSystemImageName == other.placeholderSystemImageName
-    }
 }

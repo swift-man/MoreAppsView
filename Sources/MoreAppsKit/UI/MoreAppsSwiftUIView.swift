@@ -56,9 +56,7 @@ public struct MoreAppsSwiftUIView: UIViewRepresentable {
     ) {
         uiView.onEvent = onEvent
 
-        if context.coordinator.configuration?.isEquivalent(
-            to: configuration
-        ) != true {
+        if context.coordinator.configuration != configuration {
             context.coordinator.configuration = configuration
             uiView.update(configuration: configuration)
         }
