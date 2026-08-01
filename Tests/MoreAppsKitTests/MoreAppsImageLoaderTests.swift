@@ -238,19 +238,19 @@ struct MoreAppsImageLoaderTests {
         }
 
         let loader = makeLoader()
-        let task = Task {
+        let cancelledCaller = Task {
+            try await loader.image(for: Self.imageURL)
+        }
+        let remainingCaller = Task {
             try await loader.image(for: Self.imageURL)
         }
         while counter.count == 0 {
             await Task.yield()
         }
-        task.cancel()
-        let sharedRequestImage = Task {
-            try await loader.image(for: Self.imageURL)
-        }
+        cancelledCaller.cancel()
 
         do {
-            _ = try await task.value
+            _ = try await cancelledCaller.value
             Issue.record("Expected cancellation")
         } catch is CancellationError {
             // Expected.
@@ -259,12 +259,50 @@ struct MoreAppsImageLoaderTests {
         }
 
         do {
-            let image = try await sharedRequestImage.value
+            let image = try await remainingCaller.value
             #expect(image.size.width > 0)
             #expect(counter.count == 1)
         } catch {
             Issue.record("Shared request unexpectedly failed: \(error)")
         }
+    }
+
+    @Test
+    func testCancellingOnlyWaiterCancelsHTTPTransport() async {
+        defer {
+            ImageMockURLProtocol.handler = nil
+            ImageMockURLProtocol.defersResponse = false
+            ImageMockURLProtocol.onStartLoading = nil
+            ImageMockURLProtocol.onStopLoading = nil
+        }
+        let starts = LockedCounter()
+        let stops = LockedCounter()
+        ImageMockURLProtocol.handler = { request in
+            (
+                Self.response(for: request, contentType: "image/png"),
+                Self.onePixelPNG
+            )
+        }
+        ImageMockURLProtocol.defersResponse = true
+        ImageMockURLProtocol.onStartLoading = { starts.increment() }
+        ImageMockURLProtocol.onStopLoading = { stops.increment() }
+
+        let task = Task {
+            try await makeLoader().image(for: Self.imageURL)
+        }
+        while starts.count == 0 {
+            await Task.yield()
+        }
+
+        task.cancel()
+        await expectCancellation(of: task)
+
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while stops.count == 0, clock.now < deadline {
+            await Task.yield()
+        }
+        #expect(stops.count == 1)
     }
 
     @Test
@@ -422,6 +460,9 @@ private final class LockedCounter {
 
 private final class ImageMockURLProtocol: URLProtocol {
     static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+    static var defersResponse = false
+    static var onStartLoading: (() -> Void)?
+    static var onStopLoading: (() -> Void)?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
 
@@ -437,6 +478,8 @@ private final class ImageMockURLProtocol: URLProtocol {
             )
             return
         }
+        Self.onStartLoading?()
+        guard !Self.defersResponse else { return }
 
         do {
             let (response, data) = try handler(request)
@@ -452,5 +495,7 @@ private final class ImageMockURLProtocol: URLProtocol {
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        Self.onStopLoading?()
+    }
 }

@@ -41,7 +41,8 @@ private actor MoreAppsImageRepository {
     private struct InFlightRequest {
         let id: UInt
         let generation: UInt
-        let task: Task<Data, Error>
+        let task: Task<Void, Never>
+        var waiters: [UInt: CheckedContinuation<Data, any Error>]
     }
 
     private let session: Session
@@ -49,6 +50,7 @@ private actor MoreAppsImageRepository {
     private var inFlight: [URL: InFlightRequest] = [:]
     private var cacheGeneration: UInt = 0
     private var nextRequestID: UInt = 0
+    private var nextWaiterID: UInt = 0
 
     init(
         sessionConfiguration: URLSessionConfiguration,
@@ -64,63 +66,129 @@ private actor MoreAppsImageRepository {
             throw MoreAppsImageLoadingError.insecureURL(url)
         }
 
+        let requestID: UInt
         if let request = inFlight[url] {
-            return try await value(for: request)
-        }
-
-        let generation = cacheGeneration
-        nextRequestID &+= 1
-        let requestID = nextRequestID
-        let task = Task<Data, Error> {
-            try await Self.downloadData(
-                from: url,
-                using: session,
-                maximumResponseByteCount: maximumResponseByteCount
+            requestID = request.id
+        } else {
+            let generation = cacheGeneration
+            nextRequestID &+= 1
+            requestID = nextRequestID
+            let task = Task { [session, maximumResponseByteCount] in
+                let result: Result<Data, any Error>
+                do {
+                    let data = try await Self.downloadData(
+                        from: url,
+                        using: session,
+                        maximumResponseByteCount: maximumResponseByteCount
+                    )
+                    result = .success(data)
+                } catch {
+                    result = .failure(error)
+                }
+                finishRequest(
+                    for: url,
+                    id: requestID,
+                    generation: generation,
+                    with: result
+                )
+            }
+            inFlight[url] = InFlightRequest(
+                id: requestID,
+                generation: generation,
+                task: task,
+                waiters: [:]
             )
         }
 
-        let request = InFlightRequest(
-            id: requestID,
-            generation: generation,
-            task: task
-        )
-        inFlight[url] = request
-
-        do {
-            let data = try await value(for: request)
-            removeInFlightRequest(for: url, id: requestID)
+        nextWaiterID &+= 1
+        let waiterID = nextWaiterID
+        return try await withTaskCancellationHandler {
+            let data = try await withCheckedThrowingContinuation { continuation in
+                addWaiter(
+                    continuation,
+                    for: url,
+                    requestID: requestID,
+                    waiterID: waiterID
+                )
+            }
+            try Task.checkCancellation()
             return data
-        } catch {
-            removeInFlightRequest(for: url, id: requestID)
-            throw error
+        } onCancel: {
+            Task {
+                await self.cancelWaiter(
+                    for: url,
+                    requestID: requestID,
+                    waiterID: waiterID
+                )
+            }
         }
     }
 
     func removeAllCachedImages() {
         cacheGeneration &+= 1
-        let tasks = inFlight.values.map(\.task)
+        let requests = Array(inFlight.values)
         inFlight.removeAll()
-        tasks.forEach { $0.cancel() }
-    }
-
-    private func value(for request: InFlightRequest) async throws -> Data {
-        do {
-            let data = try await request.task.value
-            guard request.generation == cacheGeneration else {
-                throw CancellationError()
+        for request in requests {
+            request.task.cancel()
+            request.waiters.values.forEach {
+                $0.resume(throwing: CancellationError())
             }
-            return data
-        } catch {
-            guard request.generation == cacheGeneration else {
-                throw CancellationError()
-            }
-            throw error
         }
     }
 
-    private func removeInFlightRequest(for url: URL, id: UInt) {
-        guard inFlight[url]?.id == id else { return }
+    private func addWaiter(
+        _ continuation: CheckedContinuation<Data, any Error>,
+        for url: URL,
+        requestID: UInt,
+        waiterID: UInt
+    ) {
+        guard var request = inFlight[url], request.id == requestID else {
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        request.waiters[waiterID] = continuation
+        inFlight[url] = request
+    }
+
+    private func cancelWaiter(
+        for url: URL,
+        requestID: UInt,
+        waiterID: UInt
+    ) {
+        guard var request = inFlight[url],
+              request.id == requestID,
+              let continuation = request.waiters.removeValue(
+                  forKey: waiterID
+              ) else {
+            return
+        }
+
+        if request.waiters.isEmpty {
+            inFlight[url] = nil
+            request.task.cancel()
+        } else {
+            inFlight[url] = request
+        }
+        continuation.resume(throwing: CancellationError())
+    }
+
+    private func finishRequest(
+        for url: URL,
+        id: UInt,
+        generation: UInt,
+        with result: Result<Data, any Error>
+    ) {
+        guard let request = inFlight[url], request.id == id else { return }
         inFlight[url] = nil
+
+        guard generation == cacheGeneration,
+              request.generation == cacheGeneration else {
+            request.waiters.values.forEach {
+                $0.resume(throwing: CancellationError())
+            }
+            return
+        }
+        request.waiters.values.forEach { $0.resume(with: result) }
     }
 
     private nonisolated static func downloadData(
@@ -307,7 +375,9 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
 /// An Alamofire-backed, memory-caching app icon loader.
 ///
 /// Concurrent requests for the same URL share one HTTP task. Image decoding is
-/// performed away from the main actor.
+/// performed away from the main actor. Cancelling one caller leaves a shared
+/// download running for the remaining callers; cancelling the last caller
+/// cancels the HTTP request.
 @MainActor
 public final class MoreAppsImageLoader {
     /// The shared image loader used by ``MoreAppsView``.
