@@ -15,6 +15,8 @@ enum MoreAppsURLPolicy {
             return allowedAppStoreURL(url) == nil ? url : nil
         }
 
+        guard scheme != "http" else { return nil }
+
         return allowedCustomSchemes.contains(scheme) ? url : nil
     }
 

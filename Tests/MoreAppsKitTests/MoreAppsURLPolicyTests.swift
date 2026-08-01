@@ -45,6 +45,18 @@ struct MoreAppsURLPolicyTests {
     }
 
     @Test
+    func testPlainHTTPIsRejectedEvenWhenAllowlisted() {
+        let url = URL(string: "http://example.com/open/sample")!
+
+        #expect(
+            MoreAppsURLPolicy.allowedDeepLink(
+                url,
+                allowedCustomSchemes: ["http"]
+            ) == nil
+        )
+    }
+
+    @Test
     func testUnlistedCustomSchemeIsRejected() {
         let url = URL(string: "shortcuts://run-shortcut?name=Unexpected")!
 

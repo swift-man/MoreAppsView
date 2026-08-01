@@ -28,8 +28,8 @@ public struct MoreAppsConfiguration: Equatable {
 
     /// Custom URL schemes that may be opened as deep links.
     ///
-    /// HTTPS Universal Links are always eligible. All non-HTTPS schemes are
-    /// denied unless their scheme name appears in this set.
+    /// HTTPS Universal Links are always eligible and plain HTTP is always
+    /// denied. Other schemes are denied unless their name appears in this set.
     public var allowedCustomDeepLinkSchemes: Set<String> {
         didSet {
             allowedCustomDeepLinkSchemes = Self.normalizedCustomSchemes(
@@ -52,8 +52,8 @@ public struct MoreAppsConfiguration: Equatable {
     ///   - contentInsets: Insets around the horizontal list.
     ///   - maximumNumberOfItems: An optional result limit.
     ///   - showsSubtitle: Whether subtitles are visible.
-    ///   - allowedCustomDeepLinkSchemes: Non-HTTPS schemes explicitly trusted
-    ///     by the host app. Scheme matching is case-insensitive.
+    ///   - allowedCustomDeepLinkSchemes: Custom, non-HTTP schemes explicitly
+    ///     trusted by the host app. Scheme matching is case-insensitive.
     ///   - placeholderSystemImageName: The fallback SF Symbol name.
     public init(
         title: String? = nil,
