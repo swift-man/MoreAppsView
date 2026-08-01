@@ -374,19 +374,29 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
 
 /// An Alamofire-backed, memory-caching app icon loader.
 ///
-/// Concurrent requests for the same URL share one HTTP task. Image decoding is
-/// performed away from the main actor. Cancelling one caller leaves a shared
-/// download running for the remaining callers; cancelling the last caller
-/// cancels the HTTP request.
+/// Concurrent requests for the same URL share one download, decode, and cache
+/// publication task. Image decoding is performed away from the main actor.
+/// Cancelling one caller leaves shared work running for the remaining callers;
+/// cancelling the last caller cancels the shared task and HTTP request.
 @MainActor
 public final class MoreAppsImageLoader {
+    private struct InFlightImageRequest {
+        let id: UInt
+        let generation: UInt
+        let task: Task<Void, Never>
+        var waiters: [UInt: CheckedContinuation<UIImage, any Error>]
+    }
+
     /// The shared image loader used by ``MoreAppsView``.
     public static let shared = MoreAppsImageLoader()
 
     private let repository: MoreAppsImageRepository
     private let imageCache = NSCache<NSURL, UIImage>()
     private let imageDecoder: @Sendable (Data) async -> UIImage?
+    private var inFlightImages: [URL: InFlightImageRequest] = [:]
     private var cacheGeneration: UInt = 0
+    private var nextImageRequestID: UInt = 0
+    private var nextImageWaiterID: UInt = 0
 
     /// Creates an image loader.
     ///
@@ -428,36 +438,143 @@ public final class MoreAppsImageLoader {
             return image
         }
 
-        let generation = cacheGeneration
-        let data = try await repository.data(for: url)
-        try Task.checkCancellation()
-        guard generation == cacheGeneration else {
-            throw CancellationError()
+        let requestID: UInt
+        if let request = inFlightImages[url] {
+            requestID = request.id
+        } else {
+            let generation = cacheGeneration
+            nextImageRequestID &+= 1
+            requestID = nextImageRequestID
+            let task = Task { [weak self, repository, imageDecoder] in
+                let result: Result<UIImage, any Error>
+                do {
+                    let data = try await repository.data(for: url)
+                    try Task.checkCancellation()
+                    guard let image = await imageDecoder(data) else {
+                        throw MoreAppsImageLoadingError.decodingFailed
+                    }
+                    try Task.checkCancellation()
+                    result = .success(image)
+                } catch {
+                    result = .failure(error)
+                }
+                self?.finishImageRequest(
+                    for: url,
+                    id: requestID,
+                    generation: generation,
+                    with: result
+                )
+            }
+            inFlightImages[url] = InFlightImageRequest(
+                id: requestID,
+                generation: generation,
+                task: task,
+                waiters: [:]
+            )
         }
 
-        let image = await imageDecoder(data)
-
-        try Task.checkCancellation()
-        guard generation == cacheGeneration else {
-            throw CancellationError()
+        nextImageWaiterID &+= 1
+        let waiterID = nextImageWaiterID
+        return try await withTaskCancellationHandler {
+            let image = try await withCheckedThrowingContinuation {
+                continuation in
+                addImageWaiter(
+                    continuation,
+                    for: url,
+                    requestID: requestID,
+                    waiterID: waiterID
+                )
+            }
+            try Task.checkCancellation()
+            return image
+        } onCancel: { [weak self] in
+            Task { @MainActor in
+                self?.cancelImageWaiter(
+                    for: url,
+                    requestID: requestID,
+                    waiterID: waiterID
+                )
+            }
         }
-        guard let image else {
-            throw MoreAppsImageLoadingError.decodingFailed
-        }
-
-        imageCache.setObject(
-            image,
-            forKey: url as NSURL,
-            cost: Self.decodedCost(of: image)
-        )
-        return image
     }
 
     /// Removes all cached images and invalidates in-progress image work.
     public func removeAllCachedImages() async {
         cacheGeneration &+= 1
         imageCache.removeAllObjects()
+        let requests = Array(inFlightImages.values)
+        inFlightImages.removeAll()
+        for request in requests {
+            request.task.cancel()
+            request.waiters.values.forEach {
+                $0.resume(throwing: CancellationError())
+            }
+        }
         await repository.removeAllCachedImages()
+    }
+
+    private func addImageWaiter(
+        _ continuation: CheckedContinuation<UIImage, any Error>,
+        for url: URL,
+        requestID: UInt,
+        waiterID: UInt
+    ) {
+        guard var request = inFlightImages[url],
+              request.id == requestID else {
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        request.waiters[waiterID] = continuation
+        inFlightImages[url] = request
+    }
+
+    private func cancelImageWaiter(
+        for url: URL,
+        requestID: UInt,
+        waiterID: UInt
+    ) {
+        guard var request = inFlightImages[url],
+              request.id == requestID,
+              let continuation = request.waiters.removeValue(
+                  forKey: waiterID
+              ) else {
+            return
+        }
+
+        if request.waiters.isEmpty {
+            inFlightImages[url] = nil
+            request.task.cancel()
+        } else {
+            inFlightImages[url] = request
+        }
+        continuation.resume(throwing: CancellationError())
+    }
+
+    private func finishImageRequest(
+        for url: URL,
+        id: UInt,
+        generation: UInt,
+        with result: Result<UIImage, any Error>
+    ) {
+        guard let request = inFlightImages[url], request.id == id else { return }
+        inFlightImages[url] = nil
+
+        guard generation == cacheGeneration,
+              request.generation == cacheGeneration else {
+            request.waiters.values.forEach {
+                $0.resume(throwing: CancellationError())
+            }
+            return
+        }
+
+        if case let .success(image) = result {
+            imageCache.setObject(
+                image,
+                forKey: url as NSURL,
+                cost: Self.decodedCost(of: image)
+            )
+        }
+        request.waiters.values.forEach { $0.resume(with: result) }
     }
 
     private nonisolated static func downsampledImage(from data: Data) -> UIImage? {
