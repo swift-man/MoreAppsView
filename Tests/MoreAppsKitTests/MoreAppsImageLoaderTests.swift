@@ -79,15 +79,14 @@ struct MoreAppsImageLoaderTests {
             try await loader.image(for: Self.imageURL)
         }
         await gate.waitUntilStarted()
+        let secondStarted = MainActorSignal()
         let second = Task {
-            try await loader.image(for: Self.imageURL)
+            secondStarted.signal()
+            return try await loader.image(for: Self.imageURL)
         }
 
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .milliseconds(100))
-        while clock.now < deadline {
-            await Task.yield()
-        }
+        await secondStarted.wait()
+        // The second task keeps the main actor until the loader registers its waiter.
         #expect(requestCounter.count == 1)
         #expect(decodeCounter.count == 1)
 
@@ -469,6 +468,26 @@ struct MoreAppsImageLoaderTests {
         base64Encoded:
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     )!
+}
+
+@MainActor
+private final class MainActorSignal {
+    private var isSignaled = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func signal() {
+        isSignaled = true
+        let continuation = continuation
+        self.continuation = nil
+        continuation?.resume()
+    }
+
+    func wait() async {
+        guard !isSignaled else { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
 }
 
 private actor ImageDecodeGate {
