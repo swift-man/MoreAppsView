@@ -9,9 +9,10 @@ struct MoreAppsImageLoaderTests {
     @Test
     func testValidImageIsCoalescedCachedAndCanBePurged() async throws {
         defer { ImageMockURLProtocol.handler = nil }
-        let counter = LockedCounter()
+        let requestCounter = LockedCounter()
+        let decodeCounter = LockedCounter()
         ImageMockURLProtocol.handler = { request in
-            counter.increment()
+            requestCounter.increment()
             Thread.sleep(forTimeInterval: 0.05)
             return (
                 Self.response(
@@ -22,21 +23,79 @@ struct MoreAppsImageLoaderTests {
             )
         }
 
-        let loader = makeLoader()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ImageMockURLProtocol.self]
+        let loader = MoreAppsImageLoader(
+            sessionConfiguration: configuration,
+            imageDecoder: { data in
+                decodeCounter.increment()
+                return UIImage(data: data, scale: 1)
+            }
+        )
         async let first = loader.image(for: Self.imageURL)
         async let second = loader.image(for: Self.imageURL)
         let images = try await (first, second)
 
         #expect(images.0.size.width > 0)
         #expect(images.1.size.height > 0)
-        #expect(counter.count == 1)
+        #expect(requestCounter.count == 1)
+        #expect(decodeCounter.count == 1)
 
         _ = try await loader.image(for: Self.imageURL)
-        #expect(counter.count == 1)
+        #expect(requestCounter.count == 1)
+        #expect(decodeCounter.count == 1)
 
         await loader.removeAllCachedImages()
         _ = try await loader.image(for: Self.imageURL)
-        #expect(counter.count == 2)
+        #expect(requestCounter.count == 2)
+        #expect(decodeCounter.count == 2)
+    }
+
+    @Test
+    func testRequestJoiningDuringDecodeSharesTheEntireLoad() async throws {
+        defer { ImageMockURLProtocol.handler = nil }
+        let requestCounter = LockedCounter()
+        let decodeCounter = LockedCounter()
+        ImageMockURLProtocol.handler = { request in
+            requestCounter.increment()
+            return (
+                Self.response(for: request, contentType: "image/png"),
+                Self.onePixelPNG
+            )
+        }
+
+        let gate = ImageDecodeGate()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ImageMockURLProtocol.self]
+        let loader = MoreAppsImageLoader(
+            sessionConfiguration: configuration,
+            imageDecoder: { data in
+                decodeCounter.increment()
+                return await gate.decode(data)
+            }
+        )
+
+        let first = Task {
+            try await loader.image(for: Self.imageURL)
+        }
+        await gate.waitUntilStarted()
+        let secondStarted = MainActorSignal()
+        let second = Task {
+            secondStarted.signal()
+            return try await loader.image(for: Self.imageURL)
+        }
+
+        await secondStarted.wait()
+        // The second task keeps the main actor until the loader registers its waiter.
+        #expect(requestCounter.count == 1)
+        #expect(decodeCounter.count == 1)
+
+        await gate.release()
+        let images = try await (first.value, second.value)
+        #expect(images.0.size.width > 0)
+        #expect(images.1.size.height > 0)
+        #expect(requestCounter.count == 1)
+        #expect(decodeCounter.count == 1)
     }
 
     @Test
@@ -411,16 +470,36 @@ struct MoreAppsImageLoaderTests {
     )!
 }
 
+@MainActor
+private final class MainActorSignal {
+    private var isSignaled = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func signal() {
+        isSignaled = true
+        let continuation = continuation
+        self.continuation = nil
+        continuation?.resume()
+    }
+
+    func wait() async {
+        guard !isSignaled else { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+}
+
 private actor ImageDecodeGate {
     private var isWaiting = true
     private var hasStarted = false
-    private var continuation: CheckedContinuation<Void, Never>?
+    private var continuations: [CheckedContinuation<Void, Never>] = []
 
     func decode(_ data: Data) async -> UIImage? {
         hasStarted = true
         if isWaiting {
             await withCheckedContinuation { continuation in
-                self.continuation = continuation
+                continuations.append(continuation)
             }
         }
         return UIImage(data: data, scale: 1)
@@ -434,8 +513,8 @@ private actor ImageDecodeGate {
 
     func release() {
         isWaiting = false
-        continuation?.resume()
-        continuation = nil
+        continuations.forEach { $0.resume() }
+        continuations.removeAll()
     }
 }
 
