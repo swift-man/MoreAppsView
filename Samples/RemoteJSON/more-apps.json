@@ -1,0 +1,52 @@
+[
+  {
+    "id": "reaction-speed",
+    "bundleIdentifier": "com.example.reactionspeed",
+    "name": "Reaction Speed",
+    "subtitle": "Train your reflexes",
+    "iconURL": "https://example.com/reaction-speed.png",
+    "destinations": [
+      {
+        "platform": "iOS",
+        "appStoreURL": "https://apps.apple.com/app/id1234567890",
+        "deepLinkURL": "reactionspeed://home"
+      }
+    ],
+    "sortOrder": 10
+  },
+  {
+    "id": "andromeda-17k",
+    "bundleIdentifier": "com.example.andromeda17k",
+    "name": "Andromeda 17K",
+    "subtitle": "A space clock for Apple TV",
+    "iconURL": "https://example.com/andromeda-17k.png",
+    "destinations": [
+      {
+        "platform": "tvOS",
+        "appStoreURL": "https://apps.apple.com/app/id0987654321",
+        "deepLinkURL": "andromeda17k://home"
+      }
+    ],
+    "sortOrder": 20
+  },
+  {
+    "id": "shared-companion",
+    "bundleIdentifier": "com.example.sharedcompanion",
+    "name": "Shared Companion",
+    "subtitle": null,
+    "iconURL": null,
+    "destinations": [
+      {
+        "platform": "iOS",
+        "appStoreURL": "https://apps.apple.com/app/id2222222222",
+        "deepLinkURL": "sharedcompanion://ios"
+      },
+      {
+        "platform": "tvOS",
+        "appStoreURL": "https://apps.apple.com/app/id2222222222",
+        "deepLinkURL": "sharedcompanion://tvos"
+      }
+    ],
+    "sortOrder": 30
+  }
+]
