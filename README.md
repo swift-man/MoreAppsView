@@ -92,7 +92,8 @@ let apps = [
 let moreAppsView = MoreAppsView(
     configuration: .init(
         showsTitle: true,
-        hidesWhenEmpty: true
+        hidesWhenEmpty: true,
+        allowedCustomDeepLinkSchemes: ["wordrush", "andromeda"]
     )
 )
 moreAppsView.setApps(apps)
@@ -112,7 +113,11 @@ Add the view to any UIKit hierarchy. It does not depend on a view controller:
 
 ```swift
 final class AppsViewController: UIViewController {
-    private let moreAppsView = MoreAppsView()
+    private let moreAppsView = MoreAppsView(
+        configuration: .init(
+            allowedCustomDeepLinkSchemes: ["wordrush"]
+        )
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -154,7 +159,8 @@ Motion is enabled.
 let moreAppsView = MoreAppsView(
     configuration: .init(
         title: "More Apps on Apple TV",
-        cardSpacing: 28
+        cardSpacing: 28,
+        allowedCustomDeepLinkSchemes: ["andromeda"]
     )
 )
 moreAppsView.setApps(sharedCatalog)
@@ -165,12 +171,22 @@ for a complete example.
 
 ## Remote JSON
 
-`RemoteJSONMoreAppsProvider` uses Alamofire, validates HTTP status codes, and
-distinguishes network/HTTP failures from JSON decoding failures:
+`RemoteJSONMoreAppsProvider` uses Alamofire, requires HTTPS throughout redirects,
+limits catalog responses to one megabyte, validates HTTP status codes, and
+distinguishes transport/HTTP failures from JSON decoding failures:
 
 ```swift
 let endpoint = URL(string: "https://example.com/more-apps.json")!
 let provider = RemoteJSONMoreAppsProvider(url: endpoint)
+let moreAppsView = MoreAppsView(
+    configuration: .init(
+        allowedCustomDeepLinkSchemes: [
+            "reactionspeed",
+            "andromeda17k",
+            "sharedcompanion"
+        ]
+    )
+)
 
 Task {
     await moreAppsView.load(using: provider)
@@ -204,18 +220,20 @@ when the filtered result is empty.
 
 When the user selects a card, the TCA reducer:
 
-1. Calls `UIApplication.shared.open` for the platform's `deepLinkURL`, if present.
-2. Stops when the completion result is `true`.
-3. Opens `appStoreURL` when the deep link is absent or reports failure.
-4. Emits the matching `openedApp`, `openedAppStore`, or `failedToOpen` event.
+1. Validates the platform's `deepLinkURL` against the host's policy.
+2. Calls `UIApplication.shared.open` for an allowed deep link, if present.
+3. Stops when the completion result is `true`.
+4. Opens `appStoreURL` when the deep link is absent, rejected, or reports failure.
+5. Emits the matching `openedApp`, `openedAppStore`, or `failedToOpen` event.
 
 MoreAppsKit never calls `canOpenURL`, so it does not require the host to add custom
 schemes to `LSApplicationQueriesSchemes` or make any other `Info.plist` change.
 The target app must configure its own URL scheme or Universal Link if it wants to
 accept the supplied deep link. HTTPS deep links use the system's
 `universalLinksOnly` option so a missing target app falls back to the App Store
-instead of opening Safari. Plain HTTP and system-action schemes such as `tel:`,
-`sms:`, and `mailto:` are rejected.
+instead of opening Safari. Plain HTTP and unlisted custom or system-action schemes
+are rejected. Add only the target apps' trusted scheme names to
+`allowedCustomDeepLinkSchemes`; its default is an empty set.
 
 ## Events and privacy
 
@@ -224,15 +242,18 @@ events. An impression is emitted at most once per app in a data session, even wh
 the same cell scrolls off screen and reappears. Calling `setApps`, or completing a
 new provider load, begins a new impression session.
 
-The callback is purely local. MoreAppsKit includes no analytics SDK, stores no
-events, collects no user data, and sends no analytics traffic.
+The callback is purely local. MoreAppsKit includes no analytics SDK, persists no
+events to disk, collects no user data, and sends no analytics traffic. It retains
+up to 100 undelivered events temporarily in memory until a handler can receive
+them.
 
 ## Configuration
 
 `MoreAppsConfiguration` controls the title, title visibility, empty-state hiding,
 corner radius, card spacing, directional insets, result limit, subtitle visibility,
-and placeholder SF Symbol. A `nil` title uses the package's English/Korean string
-catalog (`More Apps` / `다른 앱 둘러보기`). Supply `title` to override localization.
+trusted custom deep-link schemes, and placeholder SF Symbol. A `nil` title uses the
+package's English/Korean string catalog (`More Apps` / `다른 앱 둘러보기`). Supply
+`title` to override localization.
 
 ## SwiftUI
 
@@ -253,7 +274,7 @@ MoreAppsSwiftUIView(
 - `MoreAppsFilter`: explicit pure filtering for custom catalog pipelines and tests.
 - `MoreAppsProviding`, `StaticMoreAppsProvider`, `RemoteJSONMoreAppsProvider`: catalog sources.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
-- `MoreAppsConfiguration`: presentation and empty-state options.
+- `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
   background decoding, and memory caching.
 - `MoreAppsView`: UIKit entry point with `setApps`, `load`, `reload`, and `onEvent`.

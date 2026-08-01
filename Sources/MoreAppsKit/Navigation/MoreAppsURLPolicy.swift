@@ -1,31 +1,24 @@
 import Foundation
 
 enum MoreAppsURLPolicy {
-    private static let blockedDeepLinkSchemes: Set<String> = [
-        "about",
-        "app-prefs",
-        "data",
-        "facetime",
-        "facetime-audio",
-        "file",
-        "http",
-        "itms-services",
-        "javascript",
-        "mailto",
-        "prefs",
-        "sms",
-        "tel",
-        "telprompt"
-    ]
-
-    static func allowedDeepLink(_ url: URL?) -> URL? {
+    static func allowedDeepLink(
+        _ url: URL?,
+        allowedCustomSchemes: Set<String>
+    ) -> URL? {
         guard let url,
               let scheme = url.scheme?.lowercased(),
-              !scheme.isEmpty,
-              !blockedDeepLinkSchemes.contains(scheme) else {
+              !scheme.isEmpty else {
             return nil
         }
-        return url
+
+        if scheme == "https" {
+            return allowedAppStoreURL(url) == nil ? url : nil
+        }
+
+        let normalizedAllowedSchemes = Set(
+            allowedCustomSchemes.map { $0.lowercased() }
+        )
+        return normalizedAllowedSchemes.contains(scheme) ? url : nil
     }
 
     static func allowedAppStoreURL(_ url: URL) -> URL? {

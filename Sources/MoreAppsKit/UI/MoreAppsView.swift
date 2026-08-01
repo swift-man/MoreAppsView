@@ -14,8 +14,8 @@ public final class MoreAppsView: UIView {
     /// Receives analytics-neutral interaction and loading events.
     ///
     /// MoreAppsKit does not collect, persist, or transmit these events itself.
-    /// Up to the 100 most recent events emitted before a handler is assigned
-    /// are retained and delivered when a handler becomes available.
+    /// Up to the 100 most recent undelivered events are retained temporarily in
+    /// memory and delivered when a handler becomes available.
     public var onEvent: ((MoreAppsEvent) -> Void)? {
         didSet { scheduleEventDeliveryIfNeeded() }
     }
@@ -78,7 +78,9 @@ public final class MoreAppsView: UIView {
 
         let store = Store(
             initialState: MoreAppsFeature.State(
-                maximumNumberOfItems: configuration.maximumNumberOfItems
+                maximumNumberOfItems: configuration.maximumNumberOfItems,
+                allowedCustomDeepLinkSchemes: configuration
+                    .allowedCustomDeepLinkSchemes
             )
         ) {
             MoreAppsFeature()
@@ -140,6 +142,7 @@ public final class MoreAppsView: UIView {
         }
 
         let previousMaximum = configuration.maximumNumberOfItems
+        let previousAllowedSchemes = configuration.allowedCustomDeepLinkSchemes
         configuration = newConfiguration
 
         titleLabel.text = configuration.title ?? String(
@@ -157,6 +160,14 @@ public final class MoreAppsView: UIView {
         if previousMaximum != configuration.maximumNumberOfItems {
             store.send(
                 .setMaximumNumberOfItems(configuration.maximumNumberOfItems)
+            )
+        }
+
+        if previousAllowedSchemes != configuration.allowedCustomDeepLinkSchemes {
+            store.send(
+                .setAllowedCustomDeepLinkSchemes(
+                    configuration.allowedCustomDeepLinkSchemes
+                )
             )
         }
 

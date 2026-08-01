@@ -7,7 +7,8 @@ final class MoreAppsExampleViewController: UIViewController {
         configuration: .init(
             showsTitle: true,
             hidesWhenEmpty: true,
-            maximumNumberOfItems: 8
+            maximumNumberOfItems: 8,
+            allowedCustomDeepLinkSchemes: ["wordrush"]
         )
     )
 

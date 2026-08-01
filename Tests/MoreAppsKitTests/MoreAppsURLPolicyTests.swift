@@ -17,16 +17,55 @@ struct MoreAppsURLPolicyTests {
     func testSystemActionSchemesAreRejected(urlString: String) {
         let url = URL(string: urlString)!
 
-        #expect(MoreAppsURLPolicy.allowedDeepLink(url) == nil)
+        #expect(
+            MoreAppsURLPolicy.allowedDeepLink(
+                url,
+                allowedCustomSchemes: []
+            ) == nil
+        )
     }
 
     @Test
-    func testCustomSchemeAndUniversalLinkRemainSupported() {
+    func testAllowlistedCustomSchemeAndUniversalLinkAreSupported() {
         let customURL = URL(string: "sample://home")!
         let universalLink = URL(string: "https://example.com/open/sample")!
 
-        #expect(MoreAppsURLPolicy.allowedDeepLink(customURL) == customURL)
-        #expect(MoreAppsURLPolicy.allowedDeepLink(universalLink) == universalLink)
+        #expect(
+            MoreAppsURLPolicy.allowedDeepLink(
+                customURL,
+                allowedCustomSchemes: ["SAMPLE"]
+            ) == customURL
+        )
+        #expect(
+            MoreAppsURLPolicy.allowedDeepLink(
+                universalLink,
+                allowedCustomSchemes: []
+            ) == universalLink
+        )
+    }
+
+    @Test
+    func testUnlistedCustomSchemeIsRejected() {
+        let url = URL(string: "shortcuts://run-shortcut?name=Unexpected")!
+
+        #expect(
+            MoreAppsURLPolicy.allowedDeepLink(
+                url,
+                allowedCustomSchemes: ["sample"]
+            ) == nil
+        )
+    }
+
+    @Test
+    func testAppStoreURLIsNotTreatedAsADeepLink() {
+        let url = URL(string: "https://apps.apple.com/app/id100")!
+
+        #expect(
+            MoreAppsURLPolicy.allowedDeepLink(
+                url,
+                allowedCustomSchemes: []
+            ) == nil
+        )
     }
 
     @Test(
@@ -50,7 +89,10 @@ struct MoreAppsURLPolicyTests {
         )!
 
         #expect(
-            MoreAppsURLPolicy.allowedDeepLink(schemelessDeepLink) == nil
+            MoreAppsURLPolicy.allowedDeepLink(
+                schemelessDeepLink,
+                allowedCustomSchemes: []
+            ) == nil
         )
         #expect(MoreAppsURLPolicy.allowedAppStoreURL(insecureStoreURL) == nil)
     }

@@ -83,13 +83,158 @@ struct RemoteJSONMoreAppsProviderTests {
         }
     }
 
-    private func makeProvider() -> RemoteJSONMoreAppsProvider {
+    @Test
+    func testInsecureCatalogURLIsRejectedBeforeRequestStarts() async {
+        defer { RemoteJSONMockURLProtocol.handler = nil }
+        var requestCount = 0
+        RemoteJSONMockURLProtocol.handler = { request in
+            requestCount += 1
+            guard let url = request.url else { throw URLError(.badURL) }
+            return (
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!,
+                Self.validJSON
+            )
+        }
+
+        do {
+            _ = try await makeProvider(
+                url: URL(string: "http://example.com/apps.json")!
+            ).fetchApps()
+            Issue.record("Expected an insecure URL error")
+        } catch let error as RemoteJSONMoreAppsProviderError {
+            #expect(
+                error == .insecureURL(
+                    URL(string: "http://example.com/apps.json")!
+                )
+            )
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        #expect(requestCount == 0)
+    }
+
+    @Test
+    func testDeclaredResponseLengthOverLimitIsRejected() async {
+        defer { RemoteJSONMockURLProtocol.handler = nil }
+        let maximumByteCount = Self.validJSON.count
+        RemoteJSONMockURLProtocol.handler = { request in
+            guard let url = request.url else { throw URLError(.badURL) }
+            return (
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: [
+                        "Content-Type": "application/json",
+                        "Content-Length": String(maximumByteCount + 1)
+                    ]
+                )!,
+                Data()
+            )
+        }
+
+        await expectResponseTooLarge(
+            from: makeProvider(maximumResponseByteCount: maximumByteCount),
+            maximumByteCount: maximumByteCount
+        )
+    }
+
+    @Test
+    func testActualResponseLengthOverLimitIsRejected() async {
+        defer { RemoteJSONMockURLProtocol.handler = nil }
+        let maximumByteCount = Self.validJSON.count - 1
+        RemoteJSONMockURLProtocol.handler = { request in
+            guard let url = request.url else { throw URLError(.badURL) }
+            return (
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Self.validJSON
+            )
+        }
+
+        await expectResponseTooLarge(
+            from: makeProvider(maximumResponseByteCount: maximumByteCount),
+            maximumByteCount: maximumByteCount
+        )
+    }
+
+    @Test
+    func testResponseExactlyAtLimitIsAccepted() async throws {
+        defer { RemoteJSONMockURLProtocol.handler = nil }
+        RemoteJSONMockURLProtocol.handler = { request in
+            guard let url = request.url else { throw URLError(.badURL) }
+            return (
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Self.validJSON
+            )
+        }
+
+        let apps = try await makeProvider(
+            maximumResponseByteCount: Self.validJSON.count
+        ).fetchApps()
+
+        #expect(apps.count == 1)
+    }
+
+    @Test
+    func testHTTPSRedirectPolicyRejectsDowngrade() {
+        let secureURL = URL(string: "https://example.com/apps.json")!
+        let insecureURL = URL(string: "http://example.com/apps.json")!
+
+        #expect(MoreAppsHTTPSPolicy.isSecure(secureURL))
+        #expect(!MoreAppsHTTPSPolicy.isSecure(insecureURL))
+    }
+
+    private func makeProvider(
+        url: URL = URL(string: "https://example.com/apps.json")!,
+        maximumResponseByteCount: Int? = nil
+    ) -> RemoteJSONMoreAppsProvider {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RemoteJSONMockURLProtocol.self]
+        if let maximumResponseByteCount {
+            return RemoteJSONMoreAppsProvider(
+                url: url,
+                sessionConfiguration: configuration,
+                maximumResponseByteCount: maximumResponseByteCount
+            )
+        }
         return RemoteJSONMoreAppsProvider(
-            url: URL(string: "https://example.com/apps.json")!,
+            url: url,
             sessionConfiguration: configuration
         )
+    }
+
+    private func expectResponseTooLarge(
+        from provider: RemoteJSONMoreAppsProvider,
+        maximumByteCount: Int
+    ) async {
+        do {
+            _ = try await provider.fetchApps()
+            Issue.record("Expected a response-too-large error")
+        } catch let error as RemoteJSONMoreAppsProviderError {
+            #expect(
+                error == .responseTooLarge(
+                    maximumByteCount: maximumByteCount
+                )
+            )
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
     }
 
     private static let validJSON = Data(

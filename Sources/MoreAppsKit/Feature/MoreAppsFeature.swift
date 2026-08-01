@@ -10,27 +10,38 @@ struct MoreAppsFeature: Reducer {
         var apps: [MoreApp] = []
         var isLoading = false
         var maximumNumberOfItems: Int?
+        var allowedCustomDeepLinkSchemes: Set<String>
         var impressedAppIDs = Set<MoreApp.ID>()
         var openingAppIDs = Set<MoreApp.ID>()
         var pendingEvents: [EventEnvelope] = []
+        var dataSessionID = 0
         var nextEventID = 0
         var nextLoadID = 0
         var activeLoadID: Int?
 
-        init(maximumNumberOfItems: Int?) {
+        init(
+            maximumNumberOfItems: Int?,
+            allowedCustomDeepLinkSchemes: Set<String> = []
+        ) {
             self.maximumNumberOfItems = maximumNumberOfItems
+            self.allowedCustomDeepLinkSchemes = allowedCustomDeepLinkSchemes
         }
     }
 
     enum Action: Sendable {
         case setApps([MoreApp])
         case setMaximumNumberOfItems(Int?)
+        case setAllowedCustomDeepLinkSchemes(Set<String>)
         case load(MoreAppsProviderClient)
         case loadSucceeded(id: Int, apps: [MoreApp])
         case loadFailed(id: Int, message: String)
         case itemBecameVisible(appID: MoreApp.ID)
         case selected(appID: MoreApp.ID)
-        case openFinished(appID: MoreApp.ID, outcome: OpenOutcome)
+        case openFinished(
+            dataSessionID: Int,
+            appID: MoreApp.ID,
+            outcome: OpenOutcome
+        )
         case eventDelivered(Int)
     }
 
@@ -47,6 +58,7 @@ struct MoreAppsFeature: Reducer {
 
     private enum CancelID {
         case load
+        case open
     }
 
     @Dependency(\.moreAppsEnvironment) private var environment
@@ -59,7 +71,10 @@ struct MoreAppsFeature: Reducer {
                 state.isLoading = false
                 state.activeLoadID = nil
                 apply(apps, to: &state)
-                return .cancel(id: CancelID.load)
+                return .merge(
+                    .cancel(id: CancelID.load),
+                    .cancel(id: CancelID.open)
+                )
 
             case let .setMaximumNumberOfItems(maximumNumberOfItems):
                 guard state.maximumNumberOfItems != maximumNumberOfItems else {
@@ -71,6 +86,10 @@ struct MoreAppsFeature: Reducer {
                     resettingImpressions: false,
                     to: &state
                 )
+                return .none
+
+            case let .setAllowedCustomDeepLinkSchemes(schemes):
+                state.allowedCustomDeepLinkSchemes = schemes
                 return .none
 
             case let .load(provider):
@@ -106,7 +125,7 @@ struct MoreAppsFeature: Reducer {
                 state.isLoading = false
                 state.activeLoadID = nil
                 apply(apps, to: &state)
-                return .none
+                return .cancel(id: CancelID.open)
 
             case let .loadFailed(id, message):
                 guard state.activeLoadID == id else { return .none }
@@ -132,9 +151,11 @@ struct MoreAppsFeature: Reducer {
 
                 state.openingAppIDs.insert(appID)
                 enqueue(.selected(appID: appID), in: &state)
+                let dataSessionID = state.dataSessionID
 
                 let deepLinkURL = MoreAppsURLPolicy.allowedDeepLink(
-                    destination.deepLinkURL
+                    destination.deepLinkURL,
+                    allowedCustomSchemes: state.allowedCustomDeepLinkSchemes
                 )
                 let appStoreURL = MoreAppsURLPolicy.allowedAppStoreURL(
                     destination.appStoreURL
@@ -149,25 +170,42 @@ struct MoreAppsFeature: Reducer {
                 return .run { send in
                     if let deepLinkURL,
                        await openURL(deepLinkURL) {
-                        await send(.openFinished(appID: appID, outcome: .app))
+                        await send(
+                            .openFinished(
+                                dataSessionID: dataSessionID,
+                                appID: appID,
+                                outcome: .app
+                            )
+                        )
                         return
                     }
 
                     guard let appStoreURL else {
-                        await send(.openFinished(appID: appID, outcome: .failed))
+                        await send(
+                            .openFinished(
+                                dataSessionID: dataSessionID,
+                                appID: appID,
+                                outcome: .failed
+                            )
+                        )
                         return
                     }
 
                     let didOpenStore = await openURL(appStoreURL)
                     await send(
                         .openFinished(
+                            dataSessionID: dataSessionID,
                             appID: appID,
                             outcome: didOpenStore ? .appStore : .failed
                         )
                     )
                 }
+                .cancellable(id: CancelID.open)
 
-            case let .openFinished(appID, outcome):
+            case let .openFinished(dataSessionID, appID, outcome):
+                guard state.dataSessionID == dataSessionID else {
+                    return .none
+                }
                 state.openingAppIDs.remove(appID)
                 switch outcome {
                 case .app:
@@ -199,7 +237,9 @@ struct MoreAppsFeature: Reducer {
             maximumNumberOfItems: state.maximumNumberOfItems
         )
         if resettingImpressions {
+            state.dataSessionID += 1
             state.impressedAppIDs.removeAll()
+            state.openingAppIDs.removeAll()
         }
     }
 

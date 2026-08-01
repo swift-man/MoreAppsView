@@ -1,9 +1,16 @@
 import Alamofire
 import Foundation
+import ImageIO
 import UIKit
+
+private let moreAppsMaximumDecodedPixelSize = 512
+private let moreAppsImageCacheCostLimit = 32 * 1_024 * 1_024
 
 /// An error produced while downloading or decoding an app icon.
 public enum MoreAppsImageLoadingError: Error, Equatable, LocalizedError, Sendable {
+    /// The image URL does not use secure HTTPS transport.
+    case insecureURL(URL)
+
     /// The HTTP request failed.
     case network(message: String)
 
@@ -16,6 +23,8 @@ public enum MoreAppsImageLoadingError: Error, Equatable, LocalizedError, Sendabl
     /// A human-readable diagnostic description.
     public var errorDescription: String? {
         switch self {
+        case let .insecureURL(url):
+            return "The image URL must use HTTPS: \(url.absoluteString)"
         case let .network(message):
             return "Image network error: \(message)"
         case let .invalidMIMEType(mimeType):
@@ -51,6 +60,10 @@ private actor MoreAppsImageRepository {
     }
 
     func data(for url: URL) async throws -> Data {
+        guard MoreAppsHTTPSPolicy.isSecure(url) else {
+            throw MoreAppsImageLoadingError.insecureURL(url)
+        }
+
         if let request = inFlight[url] {
             return try await value(for: request)
         }
@@ -115,7 +128,9 @@ private actor MoreAppsImageRepository {
         using session: Session,
         maximumResponseByteCount: Int
     ) async throws -> Data {
-        let request = session.streamRequest(url)
+        let request = session
+            .streamRequest(url)
+            .redirect(using: MoreAppsHTTPSPolicy.redirectHandler)
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -123,11 +138,13 @@ private actor MoreAppsImageRepository {
                     maximumResponseByteCount: maximumResponseByteCount,
                     continuation: continuation
                 )
-                request.responseStream(
-                    on: receiver.queue
-                ) { stream in
-                    receiver.receive(stream)
-                }
+                request
+                    .onHTTPResponse(on: receiver.queue) { response, completion in
+                        completion(receiver.responseDisposition(for: response))
+                    }
+                    .responseStream(on: receiver.queue) { stream in
+                        receiver.receive(stream)
+                    }
             }
         } onCancel: {
             request.cancel()
@@ -162,6 +179,34 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
         case let .complete(completion):
             finish(with: completion)
         }
+    }
+
+    func responseDisposition(
+        for response: HTTPURLResponse
+    ) -> Request.ResponseDisposition {
+        guard let responseURL = response.url,
+              MoreAppsHTTPSPolicy.isSecure(responseURL) else {
+            fail(
+                with: MoreAppsImageLoadingError.network(
+                    message: "The response did not use HTTPS."
+                )
+            )
+            return .cancel
+        }
+
+        let declaredByteCount = response.expectedContentLength
+        guard declaredByteCount < 0
+            || declaredByteCount <= maximumResponseByteCount else {
+            fail(
+                with: MoreAppsImageLoadingError.network(
+                    message: "Image response exceeded the "
+                        + "\(maximumResponseByteCount)-byte limit."
+                )
+            )
+            return .cancel
+        }
+
+        return .allow
     }
 
     private func append(
@@ -202,6 +247,10 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
         lock.unlock()
 
         if let error = completion.error {
+            if error.isExplicitlyCancelledError {
+                continuation.resume(throwing: CancellationError())
+                return
+            }
             continuation.resume(
                 throwing: MoreAppsImageLoadingError.network(
                     message: error.localizedDescription
@@ -211,6 +260,7 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
         }
 
         guard let response = completion.response,
+              MoreAppsHTTPSPolicy.isSecure(response.url),
               (200..<300).contains(response.statusCode) else {
             let statusCode = completion.response
                 .map { String($0.statusCode) } ?? "missing"
@@ -241,6 +291,17 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
 
         continuation.resume(returning: data)
     }
+
+    private func fail(with error: Error) {
+        lock.lock()
+        guard let continuation else {
+            lock.unlock()
+            return
+        }
+        self.continuation = nil
+        lock.unlock()
+        continuation.resume(throwing: error)
+    }
 }
 
 /// An Alamofire-backed, memory-caching app icon loader.
@@ -268,9 +329,10 @@ public final class MoreAppsImageLoader {
         )
         self.imageDecoder = { data in
             await Task.detached(priority: .userInitiated) {
-                UIImage(data: data, scale: 1)
+                Self.downsampledImage(from: data)
             }.value
         }
+        self.imageCache.totalCostLimit = moreAppsImageCacheCostLimit
     }
 
     init(
@@ -283,6 +345,7 @@ public final class MoreAppsImageLoader {
             maximumResponseByteCount: maximumResponseByteCount
         )
         self.imageDecoder = imageDecoder
+        self.imageCache.totalCostLimit = moreAppsImageCacheCostLimit
     }
 
     /// Returns a cached or downloaded image for a URL.
@@ -312,7 +375,11 @@ public final class MoreAppsImageLoader {
             throw MoreAppsImageLoadingError.decodingFailed
         }
 
-        imageCache.setObject(image, forKey: url as NSURL)
+        imageCache.setObject(
+            image,
+            forKey: url as NSURL,
+            cost: Self.decodedCost(of: image)
+        )
         return image
     }
 
@@ -321,5 +388,40 @@ public final class MoreAppsImageLoader {
         cacheGeneration &+= 1
         imageCache.removeAllObjects()
         await repository.removeAllCachedImages()
+    }
+
+    private nonisolated static func downsampledImage(from data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(
+            data as CFData,
+            nil
+        ) else {
+            return nil
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: moreAppsMaximumDecodedPixelSize,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            options as CFDictionary
+        ) else {
+            return nil
+        }
+
+        return UIImage(cgImage: image, scale: 1, orientation: .up)
+    }
+
+    private nonisolated static func decodedCost(of image: UIImage) -> Int {
+        guard let cgImage = image.cgImage else { return 0 }
+        let (cost, overflow) = cgImage.bytesPerRow.multipliedReportingOverflow(
+            by: cgImage.height
+        )
+        return overflow
+            ? moreAppsImageCacheCostLimit
+            : min(cost, moreAppsImageCacheCostLimit)
     }
 }

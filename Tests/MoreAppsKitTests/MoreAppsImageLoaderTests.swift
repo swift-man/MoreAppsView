@@ -172,6 +172,56 @@ struct MoreAppsImageLoaderTests {
     }
 
     @Test
+    func testInsecureImageURLIsRejectedBeforeRequestStarts() async {
+        defer { ImageMockURLProtocol.handler = nil }
+        let counter = LockedCounter()
+        ImageMockURLProtocol.handler = { request in
+            counter.increment()
+            return (
+                Self.response(for: request, contentType: "image/png"),
+                Self.onePixelPNG
+            )
+        }
+        let insecureURL = URL(string: "http://example.com/icon.png")!
+
+        do {
+            _ = try await makeLoader().image(for: insecureURL)
+            Issue.record("Expected an insecure URL error")
+        } catch let error as MoreAppsImageLoadingError {
+            #expect(error == .insecureURL(insecureURL))
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        #expect(counter.count == 0)
+    }
+
+    @Test
+    func testLargePixelImageIsDownsampledBeforeCaching() async throws {
+        defer { ImageMockURLProtocol.handler = nil }
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: 1_024, height: 1_024)
+        )
+        let imageData = renderer.pngData { context in
+            UIColor.systemBlue.setFill()
+            context.fill(
+                CGRect(x: 0, y: 0, width: 1_024, height: 1_024)
+            )
+        }
+        ImageMockURLProtocol.handler = { request in
+            (
+                Self.response(for: request, contentType: "image/png"),
+                imageData
+            )
+        }
+
+        let image = try await makeLoader().image(for: Self.imageURL)
+
+        #expect((image.cgImage?.width ?? .max) <= 512)
+        #expect((image.cgImage?.height ?? .max) <= 512)
+    }
+
+    @Test
     func testCancelledCallerDoesNotReceiveDecodedImage() async {
         defer { ImageMockURLProtocol.handler = nil }
         let counter = LockedCounter()

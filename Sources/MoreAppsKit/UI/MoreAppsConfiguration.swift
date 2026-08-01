@@ -26,6 +26,12 @@ public struct MoreAppsConfiguration {
     /// Whether app subtitles are visible.
     public var showsSubtitle: Bool
 
+    /// Custom URL schemes that may be opened as deep links.
+    ///
+    /// HTTPS Universal Links are always eligible. All non-HTTPS schemes are
+    /// denied unless their scheme name appears in this set.
+    public var allowedCustomDeepLinkSchemes: Set<String>
+
     /// The SF Symbol shown while an icon is unavailable.
     public var placeholderSystemImageName: String
 
@@ -40,6 +46,8 @@ public struct MoreAppsConfiguration {
     ///   - contentInsets: Insets around the horizontal list.
     ///   - maximumNumberOfItems: An optional result limit.
     ///   - showsSubtitle: Whether subtitles are visible.
+    ///   - allowedCustomDeepLinkSchemes: Non-HTTPS schemes explicitly trusted
+    ///     by the host app. Scheme matching is case-insensitive.
     ///   - placeholderSystemImageName: The fallback SF Symbol name.
     public init(
         title: String? = nil,
@@ -55,6 +63,7 @@ public struct MoreAppsConfiguration {
         ),
         maximumNumberOfItems: Int? = nil,
         showsSubtitle: Bool = true,
+        allowedCustomDeepLinkSchemes: Set<String> = [],
         placeholderSystemImageName: String = "app.dashed"
     ) {
         self.title = title
@@ -65,6 +74,7 @@ public struct MoreAppsConfiguration {
         self.contentInsets = contentInsets
         self.maximumNumberOfItems = maximumNumberOfItems
         self.showsSubtitle = showsSubtitle
+        self.allowedCustomDeepLinkSchemes = allowedCustomDeepLinkSchemes
         self.placeholderSystemImageName = placeholderSystemImageName
     }
 
@@ -85,6 +95,8 @@ extension MoreAppsConfiguration {
             && contentInsets.trailing == other.contentInsets.trailing
             && maximumNumberOfItems == other.maximumNumberOfItems
             && showsSubtitle == other.showsSubtitle
+            && allowedCustomDeepLinkSchemes
+                == other.allowedCustomDeepLinkSchemes
             && placeholderSystemImageName == other.placeholderSystemImageName
     }
 }

@@ -12,7 +12,8 @@ final class MoreAppsExampleViewController: UIViewController {
                 leading: 64,
                 bottom: 24,
                 trailing: 64
-            )
+            ),
+            allowedCustomDeepLinkSchemes: ["andromeda"]
         )
     )
 

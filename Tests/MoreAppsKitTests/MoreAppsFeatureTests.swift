@@ -22,7 +22,11 @@ struct MoreAppsFeatureTests {
             ]
         }
         await store.receive({ action in
-            guard case .openFinished(appID: "sample", outcome: .app) = action else {
+            guard case .openFinished(
+                dataSessionID: 0,
+                appID: "sample",
+                outcome: .app
+            ) = action else {
                 return false
             }
             return true
@@ -53,7 +57,11 @@ struct MoreAppsFeatureTests {
             ]
         }
         await store.receive({ action in
-            guard case .openFinished(appID: "sample", outcome: .appStore) = action else {
+            guard case .openFinished(
+                dataSessionID: 0,
+                appID: "sample",
+                outcome: .appStore
+            ) = action else {
                 return false
             }
             return true
@@ -87,7 +95,11 @@ struct MoreAppsFeatureTests {
             ]
         }
         await store.receive({ action in
-            guard case .openFinished(appID: "sample", outcome: .appStore) = action else {
+            guard case .openFinished(
+                dataSessionID: 0,
+                appID: "sample",
+                outcome: .appStore
+            ) = action else {
                 return false
             }
             return true
@@ -168,6 +180,7 @@ struct MoreAppsFeatureTests {
         }) {
             $0.sourceApps = [app]
             $0.apps = [app]
+            $0.dataSessionID = 1
             $0.isLoading = false
             $0.activeLoadID = nil
         }
@@ -276,6 +289,7 @@ struct MoreAppsFeatureTests {
         await store.send(.setApps([replacement])) {
             $0.sourceApps = [replacement]
             $0.apps = [replacement]
+            $0.dataSessionID = 1
             $0.isLoading = false
             $0.activeLoadID = nil
         }
@@ -317,6 +331,7 @@ struct MoreAppsFeatureTests {
         }) {
             $0.sourceApps = [fresh]
             $0.apps = [fresh]
+            $0.dataSessionID = 1
             $0.isLoading = false
             $0.activeLoadID = nil
         }
@@ -338,6 +353,7 @@ struct MoreAppsFeatureTests {
         await store.send(.setApps([TestFixtures.app()])) {
             $0.sourceApps = [TestFixtures.app()]
             $0.apps = [TestFixtures.app()]
+            $0.dataSessionID = 1
         }
         await store.send(.itemBecameVisible(appID: "sample")) {
             $0.impressedAppIDs = ["sample"]
@@ -367,6 +383,7 @@ struct MoreAppsFeatureTests {
         }
 
         await store.send(.setApps([app])) {
+            $0.dataSessionID = 1
             $0.impressedAppIDs = []
         }
         await store.send(.itemBecameVisible(appID: app.id)) {
@@ -426,7 +443,11 @@ struct MoreAppsFeatureTests {
             ]
         }
         await store.receive({ action in
-            guard case .openFinished(appID: "sample", outcome: .failed) = action else {
+            guard case .openFinished(
+                dataSessionID: 0,
+                appID: "sample",
+                outcome: .failed
+            ) = action else {
                 return false
             }
             return true
@@ -461,7 +482,11 @@ struct MoreAppsFeatureTests {
             ]
         }
         await store.receive({ action in
-            guard case .openFinished(appID: "sample", outcome: .appStore) = action else {
+            guard case .openFinished(
+                dataSessionID: 0,
+                appID: "sample",
+                outcome: .appStore
+            ) = action else {
                 return false
             }
             return true
@@ -500,6 +525,106 @@ struct MoreAppsFeatureTests {
     }
 
     @Test
+    func testAppStoreDeepLinkUsesAppStoreOutcome() async {
+        let recorder = OpenRecorder(results: [true])
+        let store = makeStore(
+            app: TestFixtures.app(
+                deepLinkURL: TestFixtures.iOSStoreURL
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.selected(appID: "sample")) {
+            $0.openingAppIDs = ["sample"]
+            $0.nextEventID = 1
+            $0.pendingEvents = [
+                .init(id: 1, event: .selected(appID: "sample"))
+            ]
+        }
+        await store.receive({ action in
+            guard case .openFinished(
+                dataSessionID: 0,
+                appID: "sample",
+                outcome: .appStore
+            ) = action else {
+                return false
+            }
+            return true
+        }) {
+            $0.openingAppIDs = []
+            $0.nextEventID = 2
+            $0.pendingEvents.append(
+                .init(id: 2, event: .openedAppStore(appID: "sample"))
+            )
+        }
+
+        #expect(recorder.openedURLs == [TestFixtures.iOSStoreURL])
+    }
+
+    @Test
+    func testReplacingCatalogRejectsStaleOpenResult() async {
+        let oldApp = TestFixtures.app()
+        let replacement = TestFixtures.app(bundleIdentifier: "com.example.new")
+        var state = MoreAppsFeature.State(
+            maximumNumberOfItems: nil,
+            allowedCustomDeepLinkSchemes: ["sample"]
+        )
+        state.sourceApps = [oldApp]
+        state.apps = [oldApp]
+        state.openingAppIDs = [oldApp.id]
+
+        let recorder = OpenRecorder(results: [true])
+        let store = TestStore(initialState: state) {
+            MoreAppsFeature()
+        } withDependencies: {
+            $0.moreAppsEnvironment = .init(
+                platform: .iOS,
+                bundleIdentifier: nil
+            )
+            $0.moreAppsOpen = MoreAppsOpenClient { url in
+                recorder.open(url)
+            }
+        }
+
+        await store.send(.setApps([replacement])) {
+            $0.sourceApps = [replacement]
+            $0.apps = [replacement]
+            $0.openingAppIDs = []
+            $0.dataSessionID = 1
+        }
+        await store.send(
+            .openFinished(
+                dataSessionID: 0,
+                appID: oldApp.id,
+                outcome: .app
+            )
+        )
+        await store.send(.selected(appID: replacement.id)) {
+            $0.openingAppIDs = [replacement.id]
+            $0.nextEventID = 1
+            $0.pendingEvents = [
+                .init(id: 1, event: .selected(appID: replacement.id))
+            ]
+        }
+        await store.receive({ action in
+            guard case .openFinished(
+                dataSessionID: 1,
+                appID: replacement.id,
+                outcome: .app
+            ) = action else {
+                return false
+            }
+            return true
+        }) {
+            $0.openingAppIDs = []
+            $0.nextEventID = 2
+            $0.pendingEvents.append(
+                .init(id: 2, event: .openedApp(appID: replacement.id))
+            )
+        }
+    }
+
+    @Test
     func testChangingMaximumRestoresItemsFromTheSourceCatalog() async {
         let apps = [
             TestFixtures.app(id: "first", sortOrder: 0),
@@ -520,6 +645,7 @@ struct MoreAppsFeatureTests {
         await store.send(.setApps(apps)) {
             $0.sourceApps = apps
             $0.apps = apps
+            $0.dataSessionID = 1
         }
         await store.send(.itemBecameVisible(appID: apps[0].id)) {
             $0.impressedAppIDs = [apps[0].id]
@@ -590,6 +716,7 @@ struct MoreAppsFeatureTests {
     ) -> TestStoreOf<MoreAppsFeature> {
         var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
         state.apps = [app]
+        state.allowedCustomDeepLinkSchemes = ["sample"]
 
         return TestStore(initialState: state) {
             MoreAppsFeature()
