@@ -19,7 +19,10 @@ public enum MoreAppsEvent: Equatable, Sendable {
   /// The app's deep link opened successfully.
   case openedApp(appID: String)
 
-  /// The app's App Store page opened successfully.
+  /// The system accepted the app's App Store URL handoff.
+  ///
+  /// This does not confirm that the product page loaded or that the app was
+  /// installed.
   case openedAppStore(appID: String)
 
   /// Neither the deep link nor the App Store URL opened successfully.

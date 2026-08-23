@@ -149,8 +149,23 @@ final class MoreAppCardCell: UICollectionViewCell {
     iconImageView.image = placeholder
     iconImageView.tintColor = .secondaryLabel
 
+    let presentsOptions =
+      configuration.selectionBehavior == .platformPresentation
+    #if os(iOS)
+      let presentationActionKey: String.LocalizationValue =
+        "more_apps_open_or_view_action"
+      let presentationHintKey: String.LocalizationValue =
+        "more_apps_open_or_view_hint"
+    #else
+      let presentationActionKey: String.LocalizationValue =
+        "more_apps_view_action"
+      let presentationHintKey: String.LocalizationValue =
+        "more_apps_view_hint"
+    #endif
     let action = String(
-      localized: "more_apps_open_action",
+      localized: presentsOptions
+        ? presentationActionKey
+        : "more_apps_open_action",
       bundle: .module
     )
     accessibilityLabel = [app.name, app.subtitle, action]
@@ -158,7 +173,9 @@ final class MoreAppCardCell: UICollectionViewCell {
       .filter { !$0.isEmpty }
       .joined(separator: ", ")
     accessibilityHint = String(
-      localized: "more_apps_open_hint",
+      localized: presentsOptions
+        ? presentationHintKey
+        : "more_apps_open_hint",
       bundle: .module
     )
 

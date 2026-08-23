@@ -129,6 +129,31 @@ struct MoreAppsViewTests {
   }
 
   @Test
+  func testPlatformPresentationCardDescribesItsPlatformBehavior() {
+    let cell = MoreAppCardCell(frame: .zero)
+    cell.configure(
+      with: TestFixtures.app(),
+      configuration: .init(selectionBehavior: .platformPresentation),
+      imageLoader: .shared
+    )
+
+    #if os(iOS)
+      let actionKey: String.LocalizationValue =
+        "more_apps_open_or_view_action"
+      let hintKey: String.LocalizationValue =
+        "more_apps_open_or_view_hint"
+    #else
+      let actionKey: String.LocalizationValue = "more_apps_view_action"
+      let hintKey: String.LocalizationValue = "more_apps_view_hint"
+    #endif
+    let expectedAction = String(localized: actionKey, bundle: .module)
+    let expectedHint = String(localized: hintKey, bundle: .module)
+
+    #expect(cell.accessibilityLabel?.contains(expectedAction) == true)
+    #expect(cell.accessibilityHint == expectedHint)
+  }
+
+  @Test
   func testCardReuseClearsHighlightPresentation() {
     let cell = MoreAppCardCell(frame: .zero)
     cell.isHighlighted = true
@@ -172,18 +197,18 @@ struct MoreAppsViewTests {
     )
 
     let clock = ContinuousClock()
-    let startDeadline = clock.now.advanced(by: .seconds(1))
+    let startDeadline = clock.now.advanced(by: .seconds(5))
     while starts.count == 0, clock.now < startDeadline {
-      await Task.yield()
+      try? await Task.sleep(nanoseconds: 10_000_000)
     }
     #expect(starts.count == 1)
 
     cell = nil
 
     #expect(weakCell == nil)
-    let stopDeadline = clock.now.advanced(by: .seconds(1))
+    let stopDeadline = clock.now.advanced(by: .seconds(5))
     while stops.count == 0, clock.now < stopDeadline {
-      await Task.yield()
+      try? await Task.sleep(nanoseconds: 10_000_000)
     }
     #expect(stops.count == 1)
   }

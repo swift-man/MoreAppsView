@@ -33,6 +33,86 @@
         }
       }
     },
+    "more_apps_open_or_view_action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open or View"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "열기 또는 보기"
+          }
+        }
+      }
+    },
+    "more_apps_open_or_view_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the installed app or shows App Store options."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설치된 앱을 열거나 App Store 옵션을 표시합니다."
+          }
+        }
+      }
+    },
+    "more_apps_close_action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "닫기"
+          }
+        }
+      }
+    },
+    "more_apps_detail_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Learn more and continue to the App Store."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "앱 정보를 확인하고 App Store로 이동합니다."
+          }
+        }
+      }
+    },
+    "more_apps_store_action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View on the App Store"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App Store에서 보기"
+          }
+        }
+      }
+    },
     "more_apps_title" : {
       "localizations" : {
         "en" : {
@@ -45,6 +125,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "다른 앱 둘러보기"
+          }
+        }
+      }
+    },
+    "more_apps_view_action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보기"
+          }
+        }
+      }
+    },
+    "more_apps_view_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows App Store options for this app."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 앱의 App Store 옵션을 표시합니다."
           }
         }
       }
