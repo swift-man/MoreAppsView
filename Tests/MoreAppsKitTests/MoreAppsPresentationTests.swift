@@ -42,6 +42,51 @@ struct MoreAppsPresentationTests {
     #expect(outcome == .failed)
   }
 
+  #if os(iOS)
+    @Test
+    func testOverlayCancellationRequestsDismissalOnlyOnce() {
+      var state = MoreAppsOverlayCancellationState()
+      state.beginPresentation()
+
+      let activeOverlapOutcome = state.overlappingPresentationOutcome
+      let firstRequestWasAccepted = state.requestDismissal()
+      let secondRequestWasAccepted = state.requestDismissal()
+      let dismissingOverlapOutcome = state.overlappingPresentationOutcome
+
+      #expect(activeOverlapOutcome == .dismissed)
+      #expect(firstRequestWasAccepted)
+      #expect(!secondRequestWasAccepted)
+      #expect(dismissingOverlapOutcome == .dismissed)
+    }
+
+    @Test
+    func testOverlayFailureAfterCancellationFinishesAsDismissed() {
+      var state = MoreAppsOverlayCancellationState()
+      state.beginPresentation()
+      _ = state.requestDismissal()
+
+      let outcome = state.finish(with: .failed)
+      let duplicateOutcome = state.finish(with: .dismissed)
+
+      #expect(outcome == .dismissed)
+      #expect(duplicateOutcome == nil)
+      #expect(!state.isDismissalRequested)
+    }
+
+    @Test
+    func testOverlayFailureWithoutCancellationRemainsFailure() {
+      var state = MoreAppsOverlayCancellationState()
+      state.beginPresentation()
+
+      let outcome = state.finish(with: .failed)
+      let duplicateOutcome = state.finish(with: .dismissed)
+
+      #expect(outcome == .failed)
+      #expect(duplicateOutcome == nil)
+      #expect(!state.isDismissalRequested)
+    }
+  #endif
+
   #if os(tvOS)
     @Test
     func testTVOSStoreActionFinishesExactlyOnceDuringDisappearance() {

@@ -110,8 +110,9 @@ public final class MoreAppsView: UIView {
   /// - Parameters:
   ///   - configuration: Visual and behavioral options for the view.
   ///   - opener: The object used for deep links and App Store URLs.
-  ///   - presenter: An optional platform presentation implementation. When it
-  ///     is absent or reports failure, the reducer falls back to `opener`.
+  ///   - presenter: An optional platform presentation implementation. In
+  ///     platform-presentation mode, iOS falls back to `opener` when it is
+  ///     absent or fails; tvOS reports the failure without a URL handoff.
   ///   - imageLoader: The loader used for remote app icons.
   public init(
     configuration: MoreAppsConfiguration,

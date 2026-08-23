@@ -254,6 +254,43 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
+  func testIOSDismissedPresentationDoesNotFallbackToAppStoreURL() async {
+    let openRecorder = OpenRecorder(results: [])
+    let presentationRecorder = PresentationRecorder(outcomes: [.dismissed])
+    let store = makePlatformStore(
+      app: TestFixtures.app(deepLinkURL: nil),
+      platform: .iOS,
+      openRecorder: openRecorder,
+      presentationRecorder: presentationRecorder
+    )
+
+    await store.send(.selected(appID: "sample")) {
+      $0.presentingAppID = "sample"
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: "sample"))
+      ]
+    }
+    await store.receive({ action in
+      guard
+        case .presentationFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .dismissed
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.presentingAppID = nil
+    }
+
+    #expect(openRecorder.openedURLs.isEmpty)
+    #expect(presentationRecorder.requests.count == 1)
+  }
+
+  @Test
   func testTVOSPlatformPresentationWaitsForExplicitStoreAction() async {
     let openRecorder = OpenRecorder(results: [true])
     let presentationRecorder = PresentationRecorder(
@@ -351,7 +388,48 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testPresentationFailureFallsBackToAppStoreURL() async {
+  func testTVOSPresentationFailureDoesNotOpenAppStoreURL() async {
+    let openRecorder = OpenRecorder(results: [true])
+    let presentationRecorder = PresentationRecorder(outcomes: [.failed])
+    let store = makePlatformStore(
+      app: TestFixtures.app(platforms: [.tvOS]),
+      platform: .tvOS,
+      openRecorder: openRecorder,
+      presentationRecorder: presentationRecorder
+    )
+
+    await store.send(.selected(appID: "sample")) {
+      $0.presentingAppID = "sample"
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: "sample"))
+      ]
+    }
+    await store.receive({ action in
+      guard
+        case .presentationFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .failed
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.presentingAppID = nil
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .failedToOpen(appID: "sample"))
+      )
+    }
+
+    #expect(openRecorder.openedURLs.isEmpty)
+    #expect(presentationRecorder.requests.count == 1)
+  }
+
+  @Test
+  func testIOSPresentationFailureFallsBackToAppStoreURL() async {
     let openRecorder = OpenRecorder(results: [true])
     let presentationRecorder = PresentationRecorder(outcomes: [.failed])
     let store = makePlatformStore(
@@ -406,7 +484,7 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testRejectedStoreFallbackAfterPresentationFailureEmitsFailure() async {
+  func testIOSRejectedStoreFallbackAfterPresentationFailureEmitsFailure() async {
     let openRecorder = OpenRecorder(results: [false])
     let presentationRecorder = PresentationRecorder(outcomes: [.failed])
     let store = makePlatformStore(

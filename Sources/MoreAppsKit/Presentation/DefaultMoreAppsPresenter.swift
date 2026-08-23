@@ -27,6 +27,7 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
   #if os(iOS)
     private var activeOverlay: SKOverlay?
     private weak var activeWindowScene: UIWindowScene?
+    private var overlayCancellationState = MoreAppsOverlayCancellationState()
   #elseif os(tvOS)
     private var activeDetailViewController: MoreAppDetailViewController?
   #endif
@@ -74,6 +75,13 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
     _ request: MoreAppsPresentationRequest
   ) async -> MoreAppsPresentationOutcome {
     guard !Task.isCancelled else { return .dismissed }
+
+    #if os(iOS)
+      if activeOverlay != nil {
+        return overlayCancellationState.overlappingPresentationOutcome
+      }
+    #endif
+
     guard
       let host = presentingViewController,
       host.presentedViewController == nil,
@@ -85,7 +93,6 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
 
     #if os(iOS)
       guard
-        activeOverlay == nil,
         let appStoreIdentifier = request.appStoreIdentifier,
         !appStoreIdentifier.isEmpty
       else {
@@ -141,12 +148,14 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
     guard pendingPresentationID == id else { return }
 
     #if os(iOS)
-      if let activeWindowScene {
-        SKOverlay.dismiss(in: activeWindowScene)
+      guard overlayCancellationState.requestDismissal() else { return }
+
+      guard activeOverlay != nil, let activeWindowScene else {
+        finishActiveOverlay(outcome: .dismissed)
+        return
       }
-      activeOverlay = nil
-      activeWindowScene = nil
-      finishPendingPresentation(id: id, outcome: .dismissed)
+
+      SKOverlay.dismiss(in: activeWindowScene)
     #elseif os(tvOS)
       let detailViewController = activeDetailViewController
       detailViewController?.dismiss(animated: true) { [weak self] in
@@ -172,6 +181,7 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
 
       let overlay = SKOverlay(configuration: configuration)
       overlay.delegate = self
+      overlayCancellationState.beginPresentation()
       activeOverlay = overlay
       activeWindowScene = scene
       overlay.present(in: scene)
@@ -180,22 +190,34 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
     private func overlayDidFail(_ overlay: SKOverlay) {
       guard activeOverlay === overlay else { return }
 
-      let presentationID = pendingPresentationID
-      activeOverlay = nil
-      activeWindowScene = nil
-      if let presentationID {
-        finishPendingPresentation(id: presentationID, outcome: .failed)
-      }
+      finishActiveOverlay(outcome: .failed)
     }
 
     private func overlayDidFinishDismissal(_ overlay: SKOverlay) {
       guard activeOverlay === overlay else { return }
 
+      finishActiveOverlay(outcome: .dismissed)
+    }
+
+    private func finishActiveOverlay(
+      outcome: MoreAppsPresentationOutcome
+    ) {
+      guard
+        let resolvedOutcome = overlayCancellationState.finish(
+          with: outcome
+        )
+      else {
+        return
+      }
+
       let presentationID = pendingPresentationID
       activeOverlay = nil
       activeWindowScene = nil
       if let presentationID {
-        finishPendingPresentation(id: presentationID, outcome: .dismissed)
+        finishPendingPresentation(
+          id: presentationID,
+          outcome: resolvedOutcome
+        )
       }
     }
   #elseif os(tvOS)
@@ -257,6 +279,55 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
           return
         }
         self?.overlayDidFinishDismissal(overlay)
+      }
+    }
+  }
+#endif
+
+#if os(iOS)
+  struct MoreAppsOverlayCancellationState {
+    private enum Phase {
+      case idle
+      case active
+      case dismissalRequested
+    }
+
+    private var phase = Phase.idle
+
+    var isDismissalRequested: Bool {
+      if case .dismissalRequested = phase {
+        return true
+      }
+      return false
+    }
+
+    var overlappingPresentationOutcome: MoreAppsPresentationOutcome {
+      .dismissed
+    }
+
+    mutating func beginPresentation() {
+      phase = .active
+    }
+
+    mutating func requestDismissal() -> Bool {
+      guard case .active = phase else { return false }
+
+      phase = .dismissalRequested
+      return true
+    }
+
+    mutating func finish(
+      with outcome: MoreAppsPresentationOutcome
+    ) -> MoreAppsPresentationOutcome? {
+      switch phase {
+      case .idle:
+        return nil
+      case .active:
+        phase = .idle
+        return outcome
+      case .dismissalRequested:
+        phase = .idle
+        return .dismissed
       }
     }
   }

@@ -294,24 +294,32 @@ struct MoreAppsFeature: Reducer {
         case .dismissed:
           return .none
 
-        case .appStoreRequested, .failed:
-          guard let app = state.apps.first(where: { $0.id == appID }),
-            let destination = app.destination(for: environment.platform),
-            let appStoreURL = MoreAppsURLPolicy.allowedAppStoreURL(
-              destination.appStoreURL
-            )
-          else {
+        case .failed:
+          guard environment.platform == .iOS else {
             enqueue(.failedToOpen(appID: appID), in: &state)
             return .none
           }
 
-          state.openingAppIDs.insert(appID)
-          return appStoreOpenEffect(
-            dataSessionID: dataSessionID,
-            appID: appID,
-            appStoreURL: appStoreURL
-          )
+        case .appStoreRequested:
+          break
         }
+
+        guard let app = state.apps.first(where: { $0.id == appID }),
+          let destination = app.destination(for: environment.platform),
+          let appStoreURL = MoreAppsURLPolicy.allowedAppStoreURL(
+            destination.appStoreURL
+          )
+        else {
+          enqueue(.failedToOpen(appID: appID), in: &state)
+          return .none
+        }
+
+        state.openingAppIDs.insert(appID)
+        return appStoreOpenEffect(
+          dataSessionID: dataSessionID,
+          appID: appID,
+          appStoreURL: appStoreURL
+        )
 
       case .openFinished(let dataSessionID, let appID, let outcome):
         guard state.dataSessionID == dataSessionID else {

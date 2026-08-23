@@ -272,7 +272,9 @@ In platform-presentation mode, iOS tries the same validated deep link first. A
 failed or missing deep link presents `SKOverlay` using the numeric identifier in
 the validated App Store URL. tvOS does not open a deep link on card selection;
 it waits for the explicit App Store action in the detail sheet. A StoreKit or
-presentation failure safely falls back to the App Store URL.
+presentation failure on iOS safely falls back to the App Store URL. On tvOS,
+only `.appStoreRequested` performs the URL handoff; a presentation failure emits
+`failedToOpen` without opening the App Store.
 
 A custom `MoreAppsPresenting` implementation keeps `present(_:)` suspended until
 its UI lifecycle ends. It dismisses that UI and returns `.dismissed` when its task

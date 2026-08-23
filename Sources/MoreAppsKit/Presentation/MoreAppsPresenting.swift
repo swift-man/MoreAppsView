@@ -46,6 +46,9 @@ public enum MoreAppsPresentationOutcome: Equatable, Sendable {
   case dismissed
 
   /// The presentation could not be started or loaded.
+  ///
+  /// iOS may fall back to the validated App Store URL. tvOS treats this as a
+  /// failure and does not perform a URL handoff.
   case failed
 }
 

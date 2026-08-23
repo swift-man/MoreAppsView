@@ -18,6 +18,8 @@
 - Keep presentation effects alive through dismissal so catalog or filtering changes cancel
   stale UI, and clarify that App Store events report URL handoff rather than product-page
   loading.
+- Keep tvOS presentation failures inside the host app, and retain iOS overlay state until
+  StoreKit reports that its dismissal transition has finished.
 - Localize platform-presentation accessibility actions and make the tvOS image cancellation
   test yield execution without busy-waiting on the main actor.
 
