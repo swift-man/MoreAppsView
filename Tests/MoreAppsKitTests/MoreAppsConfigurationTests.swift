@@ -1,29 +1,38 @@
+//
+//  MoreAppsConfigurationTests.swift
+//  MoreAppsKit
+//
+//  Created by SwiftMan on 8/1/26.
+//  Copyright © 2026 MoreAppsKit. All rights reserved.
+//
+
 import Testing
+
 @testable import MoreAppsKit
 
 struct MoreAppsConfigurationTests {
-    @Test
-    func testSynthesizedEqualityTracksConfigurationChanges() {
-        let baseline = MoreAppsConfiguration.default
-        var changed = baseline
+  @Test
+  func testSynthesizedEqualityTracksConfigurationChanges() {
+    let baseline = MoreAppsConfiguration.default
+    var changed = baseline
 
-        #expect(baseline == changed)
+    #expect(baseline == changed)
 
-        changed.allowedCustomDeepLinkSchemes = ["wordrush"]
+    changed.allowedCustomDeepLinkSchemes = ["wordrush"]
 
-        #expect(baseline != changed)
-    }
+    #expect(baseline != changed)
+  }
 
-    @Test
-    func testCustomSchemesAreNormalizedWhenAssigned() {
-        var configuration = MoreAppsConfiguration(
-            allowedCustomDeepLinkSchemes: ["SAMPLE", ""]
-        )
+  @Test
+  func testCustomSchemesAreNormalizedWhenAssigned() {
+    var configuration = MoreAppsConfiguration(
+      allowedCustomDeepLinkSchemes: ["SAMPLE", ""]
+    )
 
-        #expect(configuration.allowedCustomDeepLinkSchemes == ["sample"])
+    #expect(configuration.allowedCustomDeepLinkSchemes == ["sample"])
 
-        configuration.allowedCustomDeepLinkSchemes = ["WordRush"]
+    configuration.allowedCustomDeepLinkSchemes = ["WordRush"]
 
-        #expect(configuration.allowedCustomDeepLinkSchemes == ["wordrush"])
-    }
+    #expect(configuration.allowedCustomDeepLinkSchemes == ["wordrush"])
+  }
 }
