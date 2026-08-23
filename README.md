@@ -28,10 +28,10 @@ package:
 
 ```swift
 dependencies: [
-    .package(
-        url: "https://github.com/swift-man/MoreAppsView.git",
-        from: "0.1.0"
-    )
+  .package(
+    url: "https://github.com/swift-man/MoreAppsView.git",
+    from: "0.1.1"
+  )
 ]
 ```
 
@@ -115,31 +115,31 @@ Add the view to any UIKit hierarchy. It does not depend on a view controller:
 
 ```swift
 final class AppsViewController: UIViewController {
-    private let moreAppsView = MoreAppsView(
-        configuration: .init(
-            allowedCustomDeepLinkSchemes: ["wordrush"]
-        )
+  private let moreAppsView = MoreAppsView(
+    configuration: .init(
+      allowedCustomDeepLinkSchemes: ["wordrush"]
     )
+  )
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
+  override func viewDidLoad() {
+    super.viewDidLoad()
 
-        moreAppsView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(moreAppsView)
-        NSLayoutConstraint.activate([
-            moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            moreAppsView.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor
-            )
-        ])
+    moreAppsView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(moreAppsView)
+    NSLayoutConstraint.activate([
+      moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      moreAppsView.bottomAnchor.constraint(
+        equalTo: view.safeAreaLayoutGuide.bottomAnchor
+      ),
+    ])
 
-        moreAppsView.onEvent = { event in
-            // Forward to analytics only if your app chooses to do so.
-            print(event)
-        }
-        moreAppsView.setApps(apps)
+    moreAppsView.onEvent = { event in
+      // Forward to analytics only if your app chooses to do so.
+      print(event)
     }
+    moreAppsView.setApps(apps)
+  }
 }
 ```
 
@@ -159,11 +159,11 @@ Motion is enabled.
 
 ```swift
 let moreAppsView = MoreAppsView(
-    configuration: .init(
-        title: "More Apps on Apple TV",
-        cardSpacing: 28,
-        allowedCustomDeepLinkSchemes: ["andromeda"]
-    )
+  configuration: .init(
+    title: "More Apps on Apple TV",
+    cardSpacing: 28,
+    allowedCustomDeepLinkSchemes: ["andromeda17k"]
+  )
 )
 moreAppsView.setApps(sharedCatalog)
 ```
@@ -181,17 +181,17 @@ distinguishes transport/HTTP failures from JSON decoding failures:
 let endpoint = URL(string: "https://example.com/more-apps.json")!
 let provider = RemoteJSONMoreAppsProvider(url: endpoint)
 let moreAppsView = MoreAppsView(
-    configuration: .init(
-        allowedCustomDeepLinkSchemes: [
-            "reactionspeed",
-            "andromeda17k",
-            "sharedcompanion"
-        ]
-    )
+  configuration: .init(
+    allowedCustomDeepLinkSchemes: [
+      "reactionspeed",
+      "andromeda17k",
+      "sharedcompanion",
+    ]
+  )
 )
 
 Task {
-    await moreAppsView.load(using: provider)
+  await moreAppsView.load(using: provider)
 }
 ```
 
