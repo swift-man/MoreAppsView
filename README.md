@@ -78,6 +78,9 @@ let apps = [
     bundleIdentifier: "me.gorani.Andromeda17K",
     name: "Andromeda 17K: Clock&Wallpaper",
     subtitle: "17K galaxy panorama and full-screen clock",
+    iconURL: URL(
+      string: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fd/e7/8a/fde78abc-df06-a02f-0ccb-e3bc68c973c3/App_Icon-marketing.lsr/512x512bb.jpg"
+    ),
     destinations: [
       MoreAppDestination(
         platform: .tvOS,

@@ -212,6 +212,64 @@ struct MoreAppsViewTests {
 
     #expect(events == [.impression(appID: "sample")])
   }
+
+  @Test
+  func testEventDeliveryTaskDoesNotKeepViewAlive() async {
+    var view: MoreAppsView? = MoreAppsView()
+    weak let weakView = view
+    let app = TestFixtures.app(platforms: [.current])
+    view?.setApps([app])
+    await Task.yield()
+
+    weak let collectionView = view?.subviews
+      .compactMap { $0 as? UICollectionView }
+      .first
+    var deliveredEventCount = 0
+    var shouldRequeue = true
+    view?.onEvent = { [weak capturedView = view] _ in
+      deliveredEventCount += 1
+      guard shouldRequeue,
+        let capturedView,
+        let collectionView
+      else {
+        return
+      }
+
+      capturedView.setApps([app])
+      capturedView.collectionView(
+        collectionView,
+        willDisplay: UICollectionViewCell(),
+        forItemAt: IndexPath(item: 0, section: 0)
+      )
+    }
+
+    guard let collectionView else {
+      Issue.record("Expected the More Apps collection view")
+      return
+    }
+    view?.collectionView(
+      collectionView,
+      willDisplay: UICollectionViewCell(),
+      forItemAt: IndexPath(item: 0, section: 0)
+    )
+    for _ in 0..<20 where deliveredEventCount == 0 {
+      await Task.yield()
+    }
+    guard deliveredEventCount > 0 else {
+      Issue.record("Expected event delivery to begin")
+      return
+    }
+
+    view = nil
+    let releasedWhenExternallyUnreferenced = weakView == nil
+    shouldRequeue = false
+    for _ in 0..<20 where weakView != nil {
+      await Task.yield()
+    }
+
+    #expect(releasedWhenExternallyUnreferenced)
+    #expect(weakView == nil)
+  }
 }
 
 private actor CountingProvider: MoreAppsProviding {

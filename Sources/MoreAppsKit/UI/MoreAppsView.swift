@@ -349,23 +349,36 @@ public final class MoreAppsView: UIView {
     }
 
     eventDeliveryTask = Task { [weak self] in
-      guard let self else { return }
       await Task.yield()
 
-      while !Task.isCancelled,
-        let envelope = self.store.pendingEvents.first,
-        let onEvent = self.onEvent
-      {
-        onEvent(envelope.event)
-        self.store.send(.eventDelivered(envelope.id))
+      while !Task.isCancelled {
+        let deliveredEvent: Bool
+        do {
+          guard let self else { return }
+          deliveredEvent = self.deliverNextPendingEvent()
+        }
+        guard deliveredEvent else { break }
         await Task.yield()
       }
 
+      guard let self else { return }
       self.eventDeliveryTask = nil
       if !self.store.pendingEvents.isEmpty {
         self.scheduleEventDeliveryIfNeeded()
       }
     }
+  }
+
+  private func deliverNextPendingEvent() -> Bool {
+    guard let envelope = store.pendingEvents.first,
+      let onEvent
+    else {
+      return false
+    }
+
+    onEvent(envelope.event)
+    store.send(.eventDelivered(envelope.id))
+    return true
   }
 
   private func updateTitleLayoutConstraints() {

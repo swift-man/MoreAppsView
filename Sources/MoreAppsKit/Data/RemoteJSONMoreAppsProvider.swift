@@ -44,7 +44,7 @@ private actor RemoteJSONMoreAppsRepository {
       return try decoder.decode([MoreApp].self, from: data)
     } catch {
       throw RemoteJSONMoreAppsProviderError.decoding(
-        message: error.localizedDescription
+        message: String(describing: error)
       )
     }
   }

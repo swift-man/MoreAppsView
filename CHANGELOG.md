@@ -10,8 +10,10 @@
 
 - Standardize package sources, samples, and Swift Testing files on two-space indentation
   with consistent file headers.
-- Update the remote JSON example with the production tvOS metadata, App Store destination,
-  icon, and deep link for Andromeda 17K.
+- Keep the README, remote JSON, and tvOS integration sample aligned with the production
+  metadata, App Store destination, icon, and deep link for Andromeda 17K.
+- Preserve the failing coding path and decoding context in remote-catalog diagnostics.
+- Avoid retaining `MoreAppsView` across event-delivery suspension points.
 
 ## [0.1.0] - 2026-08-01
 

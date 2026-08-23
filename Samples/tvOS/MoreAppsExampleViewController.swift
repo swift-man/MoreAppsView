@@ -21,7 +21,7 @@ final class MoreAppsExampleViewController: UIViewController {
         bottom: 24,
         trailing: 64
       ),
-      allowedCustomDeepLinkSchemes: ["andromeda"]
+      allowedCustomDeepLinkSchemes: ["andromeda17k"]
     )
   )
 
@@ -45,21 +45,25 @@ final class MoreAppsExampleViewController: UIViewController {
 
   private static let catalog = [
     MoreApp(
-      id: "andromeda",
-      bundleIdentifier: "com.example.andromeda",
-      name: "Andromeda 17K",
-      subtitle: "A space clock for Apple TV",
-      iconURL: URL(string: "https://example.com/andromeda.png"),
+      id: "andromeda-17k",
+      bundleIdentifier: "me.gorani.Andromeda17K",
+      name: "Andromeda 17K: Clock&Wallpaper",
+      subtitle: "17K galaxy panorama and full-screen clock",
+      iconURL: URL(
+        string: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/"
+          + "fd/e7/8a/fde78abc-df06-a02f-0ccb-e3bc68c973c3/"
+          + "App_Icon-marketing.lsr/512x512bb.jpg"
+      ),
       destinations: [
         MoreAppDestination(
           platform: .tvOS,
           appStoreURL: URL(
-            string: "https://apps.apple.com/app/id0987654321"
+            string: "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129"
           )!,
-          deepLinkURL: URL(string: "andromeda://home")
+          deepLinkURL: URL(string: "andromeda17k://")
         )
       ],
-      sortOrder: 10
+      sortOrder: 20
     ),
     // This entry is intentionally filtered out by a tvOS host.
     MoreApp(

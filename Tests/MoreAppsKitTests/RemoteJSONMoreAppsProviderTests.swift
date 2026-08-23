@@ -45,6 +45,14 @@ struct RemoteJSONMoreAppsProviderTests {
         )
         .utf8
     )
+    let expectedMessage: String
+    do {
+      _ = try JSONDecoder().decode([MoreApp].self, from: invalidJSON)
+      Issue.record("Expected direct decoding to fail")
+      return
+    } catch {
+      expectedMessage = String(describing: error)
+    }
     RemoteJSONMockURLProtocol.handler = { request in
       guard let url = request.url else { throw URLError(.badURL) }
       let response = HTTPURLResponse(
@@ -60,10 +68,16 @@ struct RemoteJSONMoreAppsProviderTests {
       _ = try await makeProvider().fetchApps()
       Issue.record("Expected a decoding error")
     } catch let error as RemoteJSONMoreAppsProviderError {
-      guard case .decoding = error else {
+      guard case .decoding(let message) = error else {
         Issue.record("Expected decoding error, got \(error)")
         return
       }
+      #expect(message == expectedMessage)
+      #expect(message.contains("platform"))
+      #expect(
+        error.localizedDescription
+          == "Decoding error: \(expectedMessage)"
+      )
     }
   }
 
