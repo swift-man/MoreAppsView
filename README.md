@@ -43,6 +43,8 @@ import MoreAppsKit
 
 The package resolves compatible versions of TCA, Dependencies, and Alamofire
 transitively; the host app does not need to add those products to its own target.
+The current package version is recorded in [VERSION.txt](VERSION.txt), and shipped
+changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Static catalog
 
@@ -54,47 +56,47 @@ import MoreAppsKit
 import UIKit
 
 let apps = [
-    MoreApp(
-        id: "word-rush",
-        bundleIdentifier: "com.example.wordrush",
-        name: "Word Rush",
-        subtitle: "Fast-paced typing challenge",
-        iconURL: URL(string: "https://example.com/wordrush.png"),
-        destinations: [
-            MoreAppDestination(
-                platform: .iOS,
-                appStoreURL: URL(
-                    string: "https://apps.apple.com/app/id1234567890"
-                )!,
-                deepLinkURL: URL(string: "wordrush://home")
-            )
-        ],
-        sortOrder: 10
-    ),
-    MoreApp(
-        id: "andromeda",
-        bundleIdentifier: "com.example.andromeda",
-        name: "Andromeda 17K",
-        subtitle: "Space clock for Apple TV",
-        destinations: [
-            MoreAppDestination(
-                platform: .tvOS,
-                appStoreURL: URL(
-                    string: "https://apps.apple.com/app/id0987654321"
-                )!,
-                deepLinkURL: URL(string: "andromeda://home")
-            )
-        ],
-        sortOrder: 20
-    )
+  MoreApp(
+    id: "word-rush",
+    bundleIdentifier: "com.example.wordrush",
+    name: "Word Rush",
+    subtitle: "Fast-paced typing challenge",
+    iconURL: URL(string: "https://example.com/wordrush.png"),
+    destinations: [
+      MoreAppDestination(
+        platform: .iOS,
+        appStoreURL: URL(
+          string: "https://apps.apple.com/app/id1234567890"
+        )!,
+        deepLinkURL: URL(string: "wordrush://home")
+      )
+    ],
+    sortOrder: 10
+  ),
+  MoreApp(
+    id: "andromeda-17k",
+    bundleIdentifier: "me.gorani.Andromeda17K",
+    name: "Andromeda 17K: Clock&Wallpaper",
+    subtitle: "17K galaxy panorama and full-screen clock",
+    destinations: [
+      MoreAppDestination(
+        platform: .tvOS,
+        appStoreURL: URL(
+          string: "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129"
+        )!,
+        deepLinkURL: URL(string: "andromeda17k://")
+      )
+    ],
+    sortOrder: 20
+  )
 ]
 
 let moreAppsView = MoreAppsView(
-    configuration: .init(
-        showsTitle: true,
-        hidesWhenEmpty: true,
-        allowedCustomDeepLinkSchemes: ["wordrush", "andromeda"]
-    )
+  configuration: .init(
+    showsTitle: true,
+    hidesWhenEmpty: true,
+    allowedCustomDeepLinkSchemes: ["wordrush", "andromeda17k"]
+  )
 )
 moreAppsView.setApps(apps)
 ```
@@ -301,6 +303,8 @@ cells, event envelopes, and caches remain implementation details.
 The package is intended to be validated with Xcode 26 or newer:
 
 ```sh
+xcrun swift-format lint --strict --recursive --parallel \
+  --configuration .swift-format Package.swift Samples Sources Tests
 xcodebuild -scheme MoreAppsKit -destination 'generic/platform=iOS' build
 xcodebuild -scheme MoreAppsKit -destination 'generic/platform=tvOS' build
 ```
