@@ -11,13 +11,15 @@ import UIKit
 
 @MainActor
 final class MoreAppsExampleViewController: UIViewController {
-  private let moreAppsView = MoreAppsView(
+  private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       showsTitle: true,
       hidesWhenEmpty: true,
       maximumNumberOfItems: 8,
-      allowedCustomDeepLinkSchemes: ["wordrush"]
-    )
+      allowedCustomDeepLinkSchemes: ["wordrush"],
+      selectionBehavior: .platformPresentation
+    ),
+    presentingViewController: self
   )
 
   override func viewDidLoad() {

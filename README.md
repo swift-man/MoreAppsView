@@ -2,8 +2,9 @@
 
 MoreAppsKit is a reusable UIKit package for cross-promoting your own apps with
 clean, horizontally scrolling App Store-style cards. It filters the catalog for
-the host platform, removes the current app, opens deep links with an App Store
-fallback, and emits optional closure-based events without collecting user data.
+the host platform, removes the current app, can present platform-native store
+entry points, and emits optional closure-based events without collecting user
+data.
 
 The implementation uses The Composable Architecture (TCA) for state and effects,
 `swift-dependencies` for replaceable host and URL-opening dependencies, Alamofire
@@ -30,7 +31,7 @@ package:
 dependencies: [
   .package(
     url: "https://github.com/swift-man/MoreAppsView.git",
-    from: "0.1.1"
+    from: "0.2.0"
   )
 ]
 ```
@@ -114,14 +115,17 @@ await moreAppsView.load(using: provider)
 
 ## iOS integration
 
-Add the view to any UIKit hierarchy. It does not depend on a view controller:
+Add the view to any UIKit hierarchy. Platform presentation takes an explicit host
+controller instead of discovering one from global application state:
 
 ```swift
 final class AppsViewController: UIViewController {
-  private let moreAppsView = MoreAppsView(
+  private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
-      allowedCustomDeepLinkSchemes: ["wordrush"]
-    )
+      allowedCustomDeepLinkSchemes: ["wordrush"],
+      selectionBehavior: .platformPresentation
+    ),
+    presentingViewController: self
   )
 
   override func viewDidLoad() {
@@ -148,7 +152,10 @@ final class AppsViewController: UIViewController {
 
 iPhone cards default to about 220 points wide and adapt for iPad and accessibility
 content sizes. Dynamic Type, semantic colors, VoiceOver, and touch highlighting
-are enabled by default.
+are enabled by default. With `.platformPresentation`, a successful deep link
+opens the installed app; otherwise StoreKit displays Apple's App Store overlay
+in the view controller's active window scene. If the overlay cannot load, the
+validated App Store URL remains the fallback.
 
 See [Samples/iOS/MoreAppsExampleViewController.swift](Samples/iOS/MoreAppsExampleViewController.swift)
 for a complete example.
@@ -161,15 +168,29 @@ elevated z-order, additional clipping insets, and reduced animation when Reduce
 Motion is enabled.
 
 ```swift
-let moreAppsView = MoreAppsView(
-  configuration: .init(
-    title: "More Apps on Apple TV",
-    cardSpacing: 28,
-    allowedCustomDeepLinkSchemes: ["andromeda17k"]
+final class TVAppsViewController: UIViewController {
+  private lazy var moreAppsView = MoreAppsView(
+    configuration: .init(
+      title: "More Apps on Apple TV",
+      cardSpacing: 28,
+      allowedCustomDeepLinkSchemes: ["andromeda17k"],
+      selectionBehavior: .platformPresentation
+    ),
+    presentingViewController: self
   )
-)
-moreAppsView.setApps(sharedCatalog)
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    moreAppsView.setApps(sharedCatalog)
+  }
+}
 ```
+
+tvOS does not provide `SKOverlay` or an in-app App Store product controller.
+MoreAppsKit therefore presents a focus-aware form sheet containing the app icon,
+name, subtitle, an explicit **View on the App Store** action, and a close action.
+Only the App Store action hands the validated URL to the system. Remote Back and
+Close dismiss the sheet without leaving the host app.
 
 See [Samples/tvOS/MoreAppsExampleViewController.swift](Samples/tvOS/MoreAppsExampleViewController.swift)
 for a complete example.
@@ -221,9 +242,16 @@ Consequently, an iOS host never displays a tvOS-only app, and a tvOS host never
 displays an iOS-only app. With `hidesWhenEmpty` enabled, `MoreAppsView` hides itself
 when the filtered result is empty.
 
-## Deep-link fallback
+## Selection and App Store presentation
 
-When the user selects a card, the TCA reducer:
+`MoreAppsConfiguration.selectionBehavior` supports two policies:
+
+- `.directOpen` preserves the original behavior and remains the default.
+- `.platformPresentation` uses an iOS StoreKit overlay or a tvOS app-detail
+  sheet. Supply a presenting view controller or a custom `MoreAppsPresenting`
+  implementation when selecting this policy.
+
+In direct-open mode, the TCA reducer:
 
 1. Validates the platform's `deepLinkURL` against the host's policy.
 2. Calls `UIApplication.shared.open` for an allowed deep link, if present.
@@ -239,6 +267,20 @@ accept the supplied deep link. HTTPS deep links use the system's
 instead of opening Safari. Plain HTTP and unlisted custom or system-action schemes
 are rejected. Add only the target apps' trusted scheme names to
 `allowedCustomDeepLinkSchemes`; its default is an empty set.
+
+In platform-presentation mode, iOS tries the same validated deep link first. A
+failed or missing deep link presents `SKOverlay` using the numeric identifier in
+the validated App Store URL. tvOS does not open a deep link on card selection;
+it waits for the explicit App Store action in the detail sheet. A StoreKit or
+presentation failure safely falls back to the App Store URL.
+
+A custom `MoreAppsPresenting` implementation keeps `present(_:)` suspended until
+its UI lifecycle ends. It dismisses that UI and returns `.dismissed` when its task
+is cancelled, allowing catalog and filtering changes to remove stale presentation.
+
+The `openedAppStore` event means the operating system accepted the URL handoff.
+It cannot confirm that the product page loaded, the product is available in the
+current storefront, or the app was installed.
 
 ## Events and privacy
 
@@ -256,9 +298,9 @@ them.
 
 `MoreAppsConfiguration` controls the title, title visibility, empty-state hiding,
 corner radius, card spacing, directional insets, result limit, subtitle visibility,
-trusted custom deep-link schemes, and placeholder SF Symbol. A `nil` title uses the
-package's English/Korean string catalog (`More Apps` / `다른 앱 둘러보기`). Supply
-`title` to override localization.
+trusted custom deep-link schemes, selection behavior, and placeholder SF Symbol.
+A `nil` title uses the package's English/Korean string catalog (`More Apps` /
+`다른 앱 둘러보기`). Supply `title` to override localization.
 
 ## SwiftUI
 
@@ -267,11 +309,15 @@ view:
 
 ```swift
 MoreAppsSwiftUIView(
-    apps: apps,
-    configuration: .default,
-    onEvent: { print($0) }
+  apps: apps,
+  configuration: .default,
+  onEvent: { print($0) }
 )
 ```
+
+The wrapper accepts an optional `MoreAppsPresenting` implementation when a
+SwiftUI host opts into platform presentation. Direct-open behavior requires no
+presenter.
 
 ## Public API overview
 
@@ -279,6 +325,9 @@ MoreAppsSwiftUIView(
 - `MoreAppsFilter`: explicit pure filtering for custom catalog pipelines and tests.
 - `MoreAppsProviding`, `StaticMoreAppsProvider`, `RemoteJSONMoreAppsProvider`: catalog sources.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
+- `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable StoreKit and tvOS
+  presentation without expanding the URL opener's responsibility.
+- `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in platform UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
   background decoding, and memory caching.
@@ -295,6 +344,7 @@ cells, event envelopes, and caches remain implementation details.
 | `Models` | Codable metadata, platform destinations, events, pure filtering |
 | `Data` | Provider protocol/client, static provider, Alamofire remote provider |
 | `Navigation` | URL-opening protocol, live `UIApplication` implementation, dependency key |
+| `Presentation` | StoreKit overlay, tvOS detail sheet, presenter dependency key |
 | `Feature` | TCA state, actions, effects, host environment dependency |
 | `ImageLoading` | Alamofire image bytes, MIME checks, in-flight sharing, memory caches |
 | `UI` | Configuration, reusable card cell, diffable UIKit view, SwiftUI wrapper |
