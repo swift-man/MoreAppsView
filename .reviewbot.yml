@@ -8,6 +8,7 @@ review:
     - "Samples/**/*.json"
     - ".github/workflows/**/*.yml"
     - ".github/workflows/**/*.yaml"
+    - ".swift-format"
     - ".reviewbot.yml"
     - ".gitignore"
     - "AGENTS.md"
@@ -83,6 +84,7 @@ review:
     - "**/*.doccarchive/**"
 
   always_review:
+    - ".swift-format"
     - ".reviewbot.yml"
     - ".gitignore"
     - "AGENTS.md"

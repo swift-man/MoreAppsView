@@ -16,15 +16,15 @@
   },
   {
     "id": "andromeda-17k",
-    "bundleIdentifier": "com.example.andromeda17k",
-    "name": "Andromeda 17K",
-    "subtitle": "A space clock for Apple TV",
-    "iconURL": "https://example.com/andromeda-17k.png",
+    "bundleIdentifier": "me.gorani.Andromeda17K",
+    "name": "Andromeda 17K: Clock&Wallpaper",
+    "subtitle": "17K galaxy panorama and full-screen clock",
+    "iconURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fd/e7/8a/fde78abc-df06-a02f-0ccb-e3bc68c973c3/App_Icon-marketing.lsr/512x512bb.jpg",
     "destinations": [
       {
         "platform": "tvOS",
-        "appStoreURL": "https://apps.apple.com/app/id0987654321",
-        "deepLinkURL": "andromeda17k://home"
+        "appStoreURL": "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129",
+        "deepLinkURL": "andromeda17k://"
       }
     ],
     "sortOrder": 20

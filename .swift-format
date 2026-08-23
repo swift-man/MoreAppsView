@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "indentation": {
+    "spaces": 2
+  },
+  "tabWidth": 2,
+  "indentConditionalCompilationBlocks": true,
+  "lineLength": 120,
+  "respectsExistingLineBreaks": true,
+  "rules": {
+    "OnlyOneTrailingClosureArgument": false,
+    "ReplaceForEachWithForLoop": false,
+    "UseSynthesizedInitializer": false
+  }
+}

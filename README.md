@@ -28,10 +28,10 @@ package:
 
 ```swift
 dependencies: [
-    .package(
-        url: "https://github.com/swift-man/MoreAppsView.git",
-        from: "0.1.0"
-    )
+  .package(
+    url: "https://github.com/swift-man/MoreAppsView.git",
+    from: "0.1.1"
+  )
 ]
 ```
 
@@ -43,6 +43,8 @@ import MoreAppsKit
 
 The package resolves compatible versions of TCA, Dependencies, and Alamofire
 transitively; the host app does not need to add those products to its own target.
+The current package version is recorded in [VERSION.txt](VERSION.txt), and shipped
+changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Static catalog
 
@@ -54,47 +56,50 @@ import MoreAppsKit
 import UIKit
 
 let apps = [
-    MoreApp(
-        id: "word-rush",
-        bundleIdentifier: "com.example.wordrush",
-        name: "Word Rush",
-        subtitle: "Fast-paced typing challenge",
-        iconURL: URL(string: "https://example.com/wordrush.png"),
-        destinations: [
-            MoreAppDestination(
-                platform: .iOS,
-                appStoreURL: URL(
-                    string: "https://apps.apple.com/app/id1234567890"
-                )!,
-                deepLinkURL: URL(string: "wordrush://home")
-            )
-        ],
-        sortOrder: 10
+  MoreApp(
+    id: "word-rush",
+    bundleIdentifier: "com.example.wordrush",
+    name: "Word Rush",
+    subtitle: "Fast-paced typing challenge",
+    iconURL: URL(string: "https://example.com/wordrush.png"),
+    destinations: [
+      MoreAppDestination(
+        platform: .iOS,
+        appStoreURL: URL(
+          string: "https://apps.apple.com/app/id1234567890"
+        )!,
+        deepLinkURL: URL(string: "wordrush://home")
+      )
+    ],
+    sortOrder: 10
+  ),
+  MoreApp(
+    id: "andromeda-17k",
+    bundleIdentifier: "me.gorani.Andromeda17K",
+    name: "Andromeda 17K: Clock&Wallpaper",
+    subtitle: "17K galaxy panorama and full-screen clock",
+    iconURL: URL(
+      string: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fd/e7/8a/fde78abc-df06-a02f-0ccb-e3bc68c973c3/App_Icon-marketing.lsr/512x512bb.jpg"
     ),
-    MoreApp(
-        id: "andromeda",
-        bundleIdentifier: "com.example.andromeda",
-        name: "Andromeda 17K",
-        subtitle: "Space clock for Apple TV",
-        destinations: [
-            MoreAppDestination(
-                platform: .tvOS,
-                appStoreURL: URL(
-                    string: "https://apps.apple.com/app/id0987654321"
-                )!,
-                deepLinkURL: URL(string: "andromeda://home")
-            )
-        ],
-        sortOrder: 20
-    )
+    destinations: [
+      MoreAppDestination(
+        platform: .tvOS,
+        appStoreURL: URL(
+          string: "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129"
+        )!,
+        deepLinkURL: URL(string: "andromeda17k://")
+      )
+    ],
+    sortOrder: 20
+  )
 ]
 
 let moreAppsView = MoreAppsView(
-    configuration: .init(
-        showsTitle: true,
-        hidesWhenEmpty: true,
-        allowedCustomDeepLinkSchemes: ["wordrush", "andromeda"]
-    )
+  configuration: .init(
+    showsTitle: true,
+    hidesWhenEmpty: true,
+    allowedCustomDeepLinkSchemes: ["wordrush", "andromeda17k"]
+  )
 )
 moreAppsView.setApps(apps)
 ```
@@ -113,31 +118,31 @@ Add the view to any UIKit hierarchy. It does not depend on a view controller:
 
 ```swift
 final class AppsViewController: UIViewController {
-    private let moreAppsView = MoreAppsView(
-        configuration: .init(
-            allowedCustomDeepLinkSchemes: ["wordrush"]
-        )
+  private let moreAppsView = MoreAppsView(
+    configuration: .init(
+      allowedCustomDeepLinkSchemes: ["wordrush"]
     )
+  )
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
+  override func viewDidLoad() {
+    super.viewDidLoad()
 
-        moreAppsView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(moreAppsView)
-        NSLayoutConstraint.activate([
-            moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            moreAppsView.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor
-            )
-        ])
+    moreAppsView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(moreAppsView)
+    NSLayoutConstraint.activate([
+      moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      moreAppsView.bottomAnchor.constraint(
+        equalTo: view.safeAreaLayoutGuide.bottomAnchor
+      ),
+    ])
 
-        moreAppsView.onEvent = { event in
-            // Forward to analytics only if your app chooses to do so.
-            print(event)
-        }
-        moreAppsView.setApps(apps)
+    moreAppsView.onEvent = { event in
+      // Forward to analytics only if your app chooses to do so.
+      print(event)
     }
+    moreAppsView.setApps(apps)
+  }
 }
 ```
 
@@ -157,11 +162,11 @@ Motion is enabled.
 
 ```swift
 let moreAppsView = MoreAppsView(
-    configuration: .init(
-        title: "More Apps on Apple TV",
-        cardSpacing: 28,
-        allowedCustomDeepLinkSchemes: ["andromeda"]
-    )
+  configuration: .init(
+    title: "More Apps on Apple TV",
+    cardSpacing: 28,
+    allowedCustomDeepLinkSchemes: ["andromeda17k"]
+  )
 )
 moreAppsView.setApps(sharedCatalog)
 ```
@@ -179,17 +184,17 @@ distinguishes transport/HTTP failures from JSON decoding failures:
 let endpoint = URL(string: "https://example.com/more-apps.json")!
 let provider = RemoteJSONMoreAppsProvider(url: endpoint)
 let moreAppsView = MoreAppsView(
-    configuration: .init(
-        allowedCustomDeepLinkSchemes: [
-            "reactionspeed",
-            "andromeda17k",
-            "sharedcompanion"
-        ]
-    )
+  configuration: .init(
+    allowedCustomDeepLinkSchemes: [
+      "reactionspeed",
+      "andromeda17k",
+      "sharedcompanion",
+    ]
+  )
 )
 
 Task {
-    await moreAppsView.load(using: provider)
+  await moreAppsView.load(using: provider)
 }
 ```
 
@@ -301,6 +306,8 @@ cells, event envelopes, and caches remain implementation details.
 The package is intended to be validated with Xcode 26 or newer:
 
 ```sh
+xcrun swift-format lint --strict --recursive --parallel \
+  --configuration .swift-format Package.swift Samples Sources Tests
 xcodebuild -scheme MoreAppsKit -destination 'generic/platform=iOS' build
 xcodebuild -scheme MoreAppsKit -destination 'generic/platform=tvOS' build
 ```
