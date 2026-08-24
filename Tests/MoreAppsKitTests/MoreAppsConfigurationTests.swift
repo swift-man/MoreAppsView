@@ -21,6 +21,11 @@ struct MoreAppsConfigurationTests {
     changed.allowedCustomDeepLinkSchemes = ["wordrush"]
 
     #expect(baseline != changed)
+
+    changed = baseline
+    changed.selectionBehavior = .platformPresentation
+
+    #expect(baseline != changed)
   }
 
   @Test

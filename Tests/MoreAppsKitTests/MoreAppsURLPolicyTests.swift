@@ -118,6 +118,74 @@ struct MoreAppsURLPolicyTests {
     #expect(MoreAppsURLPolicy.allowedAppStoreURL(insecureStoreURL) == nil)
   }
 
+  @Test(
+    arguments: [
+      (
+        "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129",
+        "6786789129"
+      ),
+      (
+        "https://itunes.apple.com/us/app/sample/id12345?mt=8",
+        "12345"
+      ),
+      (
+        "itms-apps://apps.apple.com/app/id42",
+        "42"
+      ),
+      (
+        "itms-apps://itunes.apple.com/us/app/id7",
+        "7"
+      ),
+    ]
+  )
+  func testAppStoreIdentifierIsExtractedFromAPathComponent(
+    urlString: String,
+    expectedIdentifier: String
+  ) {
+    let url = URL(string: urlString)!
+
+    #expect(
+      MoreAppsURLPolicy.appStoreIdentifier(from: url)
+        == expectedIdentifier
+    )
+  }
+
+  @Test(
+    arguments: [
+      "https://apps.apple.com/app/sample",
+      "https://apps.apple.com/app/sample?id123",
+      "https://apps.apple.com/app/sample#id123",
+      "https://apps.apple.com/app/sample-id123",
+      "https://apps.apple.com/app/id123-preview",
+      "https://apps.apple.com/app/id12a3",
+      "https://apps.apple.com/app/id0",
+      "https://apps.apple.com/app/id000",
+      "https://apps.apple.com/app/id%31%32%33",
+      "https://apps.apple.com/app/id100/id200",
+    ]
+  )
+  func testInvalidAppStoreIdentifiersAreRejected(urlString: String) {
+    let url = URL(string: urlString)!
+
+    #expect(MoreAppsURLPolicy.appStoreIdentifier(from: url) == nil)
+  }
+
+  @Test(
+    arguments: [
+      "https://example.com/app/id123",
+      "https://apps.apple.com.example.com/app/id123",
+      "itms-apps://example.com/app/id123",
+      "http://apps.apple.com/app/id123",
+    ]
+  )
+  func testAppStoreIdentifierRequiresAnAllowedStoreURL(
+    urlString: String
+  ) {
+    let url = URL(string: urlString)!
+
+    #expect(MoreAppsURLPolicy.appStoreIdentifier(from: url) == nil)
+  }
+
   @MainActor
   @Test
   func testOnlyNonStoreHTTPSLinksRequireUniversalLinkHandling() {

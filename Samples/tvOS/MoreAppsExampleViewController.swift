@@ -11,7 +11,7 @@ import UIKit
 
 @MainActor
 final class MoreAppsExampleViewController: UIViewController {
-  private let moreAppsView = MoreAppsView(
+  private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       title: "More Apps on Apple TV",
       cardSpacing: 28,
@@ -21,8 +21,10 @@ final class MoreAppsExampleViewController: UIViewController {
         bottom: 24,
         trailing: 64
       ),
-      allowedCustomDeepLinkSchemes: ["andromeda17k"]
-    )
+      allowedCustomDeepLinkSchemes: ["andromeda17k"],
+      selectionBehavior: .platformPresentation
+    ),
+    presentingViewController: self
   )
 
   override func viewDidLoad() {

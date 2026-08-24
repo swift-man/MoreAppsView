@@ -56,7 +56,33 @@ public final class MoreAppsView: UIView {
     self.init(
       configuration: configuration,
       opener: DefaultMoreAppsOpener.shared,
+      presenter: nil,
       imageLoader: .shared
+    )
+  }
+
+  /// Creates a More Apps view with the package's platform presenter.
+  ///
+  /// Use this initializer with ``MoreAppsSelectionBehavior/platformPresentation``
+  /// to present an App Store overlay on iOS or an app-detail sheet on tvOS.
+  /// The presenter keeps only a weak reference to the supplied view controller.
+  ///
+  /// - Parameters:
+  ///   - configuration: Visual and behavioral options for the view.
+  ///   - presentingViewController: The controller that owns the presentation context.
+  public convenience init(
+    configuration: MoreAppsConfiguration = .default,
+    presentingViewController: UIViewController
+  ) {
+    let imageLoader = MoreAppsImageLoader.shared
+    self.init(
+      configuration: configuration,
+      opener: DefaultMoreAppsOpener.shared,
+      presenter: DefaultMoreAppsPresenter(
+        presentingViewController: presentingViewController,
+        imageLoader: imageLoader
+      ),
+      imageLoader: imageLoader
     )
   }
 
@@ -66,9 +92,32 @@ public final class MoreAppsView: UIView {
   ///   - configuration: Visual and behavioral options for the view.
   ///   - opener: The object used for deep links and App Store URLs.
   ///   - imageLoader: The loader used for remote app icons.
+  public convenience init(
+    configuration: MoreAppsConfiguration,
+    opener: any MoreAppsOpening,
+    imageLoader: MoreAppsImageLoader
+  ) {
+    self.init(
+      configuration: configuration,
+      opener: opener,
+      presenter: nil,
+      imageLoader: imageLoader
+    )
+  }
+
+  /// Creates a More Apps view with explicit testable collaborators.
+  ///
+  /// - Parameters:
+  ///   - configuration: Visual and behavioral options for the view.
+  ///   - opener: The object used for deep links and App Store URLs.
+  ///   - presenter: An optional platform presentation implementation. In
+  ///     platform-presentation mode, iOS falls back to `opener` when it is
+  ///     absent or fails; tvOS reports the failure without a URL handoff.
+  ///   - imageLoader: The loader used for remote app icons.
   public init(
     configuration: MoreAppsConfiguration,
     opener: any MoreAppsOpening,
+    presenter: (any MoreAppsPresenting)?,
     imageLoader: MoreAppsImageLoader
   ) {
     self.configuration = configuration
@@ -88,13 +137,17 @@ public final class MoreAppsView: UIView {
       initialState: MoreAppsFeature.State(
         maximumNumberOfItems: configuration.maximumNumberOfItems,
         allowedCustomDeepLinkSchemes: configuration
-          .allowedCustomDeepLinkSchemes
+          .allowedCustomDeepLinkSchemes,
+        selectionBehavior: configuration.selectionBehavior
       )
     ) {
       MoreAppsFeature()
     } withDependencies: {
       $0.moreAppsEnvironment = .live
       $0.moreAppsOpen = MoreAppsOpenClient(opener: opener)
+      $0.moreAppsPresentation = MoreAppsPresentationClient(
+        presenter: presenter
+      )
     }
     self.store = store
 
@@ -151,6 +204,7 @@ public final class MoreAppsView: UIView {
 
     let previousMaximum = configuration.maximumNumberOfItems
     let previousAllowedSchemes = configuration.allowedCustomDeepLinkSchemes
+    let previousSelectionBehavior = configuration.selectionBehavior
     configuration = newConfiguration
 
     titleLabel.text =
@@ -178,6 +232,12 @@ public final class MoreAppsView: UIView {
         .setAllowedCustomDeepLinkSchemes(
           configuration.allowedCustomDeepLinkSchemes
         )
+      )
+    }
+
+    if previousSelectionBehavior != configuration.selectionBehavior {
+      store.send(
+        .setSelectionBehavior(configuration.selectionBehavior)
       )
     }
 

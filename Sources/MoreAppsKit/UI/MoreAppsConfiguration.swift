@@ -49,6 +49,9 @@ public struct MoreAppsConfiguration: Equatable {
   /// The SF Symbol shown while an icon is unavailable.
   public var placeholderSystemImageName: String
 
+  /// The action performed after someone selects an app card.
+  public var selectionBehavior: MoreAppsSelectionBehavior
+
   /// Creates a More Apps presentation configuration.
   ///
   /// - Parameters:
@@ -63,6 +66,7 @@ public struct MoreAppsConfiguration: Equatable {
   ///   - allowedCustomDeepLinkSchemes: Custom, non-HTTP schemes explicitly
   ///     trusted by the host app. Scheme matching is case-insensitive.
   ///   - placeholderSystemImageName: The fallback SF Symbol name.
+  ///   - selectionBehavior: The action performed after card selection.
   public init(
     title: String? = nil,
     showsTitle: Bool = true,
@@ -78,7 +82,8 @@ public struct MoreAppsConfiguration: Equatable {
     maximumNumberOfItems: Int? = nil,
     showsSubtitle: Bool = true,
     allowedCustomDeepLinkSchemes: Set<String> = [],
-    placeholderSystemImageName: String = "app.dashed"
+    placeholderSystemImageName: String = "app.dashed",
+    selectionBehavior: MoreAppsSelectionBehavior = .directOpen
   ) {
     self.title = title
     self.showsTitle = showsTitle
@@ -92,6 +97,7 @@ public struct MoreAppsConfiguration: Equatable {
       allowedCustomDeepLinkSchemes
     )
     self.placeholderSystemImageName = placeholderSystemImageName
+    self.selectionBehavior = selectionBehavior
   }
 
   /// The default App Store-style card configuration.

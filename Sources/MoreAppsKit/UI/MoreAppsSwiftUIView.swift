@@ -14,6 +14,7 @@
   public struct MoreAppsSwiftUIView: UIViewRepresentable {
     private let apps: [MoreApp]
     private let configuration: MoreAppsConfiguration
+    private let presenter: (any MoreAppsPresenting)?
     private let onEvent: ((MoreAppsEvent) -> Void)?
 
     /// Creates a SwiftUI More Apps view backed by `UICollectionView`.
@@ -21,14 +22,17 @@
     /// - Parameters:
     ///   - apps: The unfiltered app catalog.
     ///   - configuration: Visual and behavioral options.
+    ///   - presenter: An optional platform presentation implementation.
     ///   - onEvent: An optional event callback.
     public init(
       apps: [MoreApp],
       configuration: MoreAppsConfiguration = .default,
+      presenter: (any MoreAppsPresenting)? = nil,
       onEvent: ((MoreAppsEvent) -> Void)? = nil
     ) {
       self.apps = apps
       self.configuration = configuration
+      self.presenter = presenter
       self.onEvent = onEvent
     }
 
@@ -37,6 +41,7 @@
     public final class Coordinator {
       fileprivate var apps: [MoreApp] = []
       fileprivate var configuration: MoreAppsConfiguration?
+      fileprivate let presentationRelay = MoreAppsPresentationRelay()
 
       /// Creates an empty wrapper coordinator.
       public init() {}
@@ -49,7 +54,13 @@
 
     /// Creates the underlying UIKit view.
     public func makeUIView(context: Context) -> MoreAppsView {
-      let view = MoreAppsView(configuration: configuration)
+      context.coordinator.presentationRelay.presenter = presenter
+      let view = MoreAppsView(
+        configuration: configuration,
+        opener: DefaultMoreAppsOpener.shared,
+        presenter: context.coordinator.presentationRelay,
+        imageLoader: .shared
+      )
       view.onEvent = onEvent
       view.setApps(apps)
       context.coordinator.apps = apps
@@ -63,6 +74,7 @@
       context: Context
     ) {
       uiView.onEvent = onEvent
+      context.coordinator.presentationRelay.presenter = presenter
 
       if context.coordinator.configuration != configuration {
         context.coordinator.configuration = configuration

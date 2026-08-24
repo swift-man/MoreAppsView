@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.0] - 2026-08-23
+
+### Added
+
+- Add an opt-in platform presentation policy while preserving direct URL opening as the
+  source-compatible default.
+- Present a StoreKit App Store overlay after iOS deep-link fallback and a focus-aware app
+  detail sheet with explicit App Store and close actions on tvOS.
+- Inject platform presentation through a public `MoreAppsPresenting` boundary and a TCA
+  dependency, including SwiftUI presenter replacement support.
+
+### Changed
+
+- Validate a single numeric App Store path identifier before configuring the iOS overlay,
+  while retaining the validated App Store URL as a safe fallback.
+- Keep presentation effects alive through dismissal so catalog or filtering changes cancel
+  stale UI, and clarify that App Store events report URL handoff rather than product-page
+  loading.
+- Keep tvOS presentation failures inside the host app, and retain iOS overlay state until
+  StoreKit reports that its dismissal transition has finished.
+- Localize platform-presentation accessibility actions and make the tvOS image cancellation
+  test yield execution without busy-waiting on the main actor.
+
 ## [0.1.1] - 2026-08-23
 
 ### Added

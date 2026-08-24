@@ -41,4 +41,36 @@ enum MoreAppsURLPolicy {
     }
     return url
   }
+
+  static func appStoreIdentifier(from url: URL) -> String? {
+    guard allowedAppStoreURL(url) != nil,
+      let components = URLComponents(
+        url: url,
+        resolvingAgainstBaseURL: false
+      )
+    else {
+      return nil
+    }
+
+    let identifiers = components.percentEncodedPath.split(separator: "/")
+      .compactMap { component -> String? in
+        guard component.hasPrefix("id") else { return nil }
+
+        let identifier = component.dropFirst(2)
+        guard !identifier.isEmpty,
+          identifier.utf8.allSatisfy({ (48...57).contains($0) }),
+          identifier.utf8.contains(where: { $0 != 48 })
+        else {
+          return nil
+        }
+
+        return String(identifier)
+      }
+
+    guard identifiers.count == 1 else {
+      return nil
+    }
+
+    return identifiers[0]
+  }
 }
