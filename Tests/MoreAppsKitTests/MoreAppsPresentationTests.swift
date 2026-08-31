@@ -89,6 +89,61 @@ struct MoreAppsPresentationTests {
 
   #if os(tvOS)
     @Test
+    func testTVOSDetailUsesFullScreenPresentation() {
+      let viewController = MoreAppDetailViewController(
+        app: TestFixtures.app(platforms: [.tvOS]),
+        imageLoader: .shared
+      ) { _ in }
+
+      #expect(viewController.modalPresentationStyle == .fullScreen)
+    }
+
+    @Test
+    func testTVOSDetailPrefersTheDestinationActionForInitialFocus() {
+      let viewController = MoreAppDetailViewController(
+        app: TestFixtures.app(platforms: [.tvOS]),
+        imageLoader: .shared
+      ) { _ in }
+      viewController.loadViewIfNeeded()
+
+      #expect(viewController.preferredFocusEnvironments.count == 1)
+      let preferredButton =
+        viewController.preferredFocusEnvironments.first as? UIButton
+      #expect(
+        preferredButton?.configuration?.title
+          == String(
+            localized: "more_apps_store_action",
+            bundle: .module
+          )
+      )
+      #expect(
+        preferredButton?.accessibilityHint
+          == String(
+            localized: "more_apps_detail_hint",
+            bundle: .module
+          )
+      )
+    }
+
+    @Test
+    func testTVOSAccessibilityEscapeFinishesAsDismissed() {
+      var outcomes: [MoreAppsPresentationOutcome] = []
+      let viewController = MoreAppDetailViewController(
+        app: TestFixtures.app(platforms: [.tvOS]),
+        imageLoader: .shared
+      ) { outcome in
+        outcomes.append(outcome)
+      }
+      viewController.loadViewIfNeeded()
+
+      let handled = viewController.accessibilityPerformEscape()
+      viewController.viewDidDisappear(false)
+
+      #expect(handled)
+      #expect(outcomes == [.dismissed])
+    }
+
+    @Test
     func testTVOSStoreActionFinishesExactlyOnceDuringDisappearance() {
       var outcomes: [MoreAppsPresentationOutcome] = []
       let viewController = MoreAppDetailViewController(

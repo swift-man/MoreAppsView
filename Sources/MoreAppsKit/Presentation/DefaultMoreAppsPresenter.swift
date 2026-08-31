@@ -12,7 +12,8 @@ import Foundation
 #endif
 import UIKit
 
-/// Presents the system App Store overlay on iOS and an app detail sheet on tvOS.
+/// Presents the system App Store overlay on iOS and a full-screen app preview
+/// on tvOS.
 @MainActor
 public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
   private weak var presentingViewController: UIViewController?
@@ -57,7 +58,8 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
   /// - Parameters:
   ///   - presentingViewController: The view controller whose window and modal
   ///     presentation context should be used.
-  ///   - imageLoader: The loader used for artwork in the tvOS detail sheet.
+  ///   - imageLoader: The loader used for artwork in the tvOS full-screen
+  ///     preview.
   public init(
     presentingViewController: UIViewController,
     imageLoader: MoreAppsImageLoader
@@ -70,7 +72,7 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
   /// Presents the platform-appropriate App Store experience.
   ///
   /// - Parameter request: The app and destination to present.
-  /// - Returns: The outcome reported by StoreKit or the tvOS detail sheet.
+  /// - Returns: The outcome reported by StoreKit or the tvOS app preview.
   public func present(
     _ request: MoreAppsPresentationRequest
   ) async -> MoreAppsPresentationOutcome {
@@ -239,7 +241,6 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
           )
         }
       }
-      detailViewController.modalPresentationStyle = .formSheet
       activeDetailViewController = detailViewController
       host.present(detailViewController, animated: true)
     }

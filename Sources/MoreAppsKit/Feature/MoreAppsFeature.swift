@@ -290,12 +290,13 @@ struct MoreAppsFeature: Reducer {
         }
 
         state.presentingAppID = nil
+        let platform = environment.platform
         switch outcome {
         case .dismissed:
           return .none
 
         case .failed:
-          guard environment.platform == .iOS else {
+          guard platform == .iOS else {
             enqueue(.failedToOpen(appID: appID), in: &state)
             return .none
           }
@@ -313,11 +314,18 @@ struct MoreAppsFeature: Reducer {
           enqueue(.failedToOpen(appID: appID), in: &state)
           return .none
         }
+        let deepLinkURL =
+          platform == .tvOS && outcome == .appStoreRequested
+          ? MoreAppsURLPolicy.allowedDeepLink(
+            destination.deepLinkURL,
+            allowedCustomSchemes: state.allowedCustomDeepLinkSchemes
+          ) : nil
 
         state.openingAppIDs.insert(appID)
-        return appStoreOpenEffect(
+        return directOpenEffect(
           dataSessionID: dataSessionID,
           appID: appID,
+          deepLinkURL: deepLinkURL,
           appStoreURL: appStoreURL
         )
 
@@ -402,25 +410,6 @@ struct MoreAppsFeature: Reducer {
         return
       }
 
-      let didOpenStore = await openURL(appStoreURL)
-      guard !Task.isCancelled else { return }
-      await send(
-        .openFinished(
-          dataSessionID: dataSessionID,
-          appID: appID,
-          outcome: didOpenStore ? .appStore : .failed
-        )
-      )
-    }
-    .cancellable(id: CancelID.open)
-  }
-
-  private func appStoreOpenEffect(
-    dataSessionID: Int,
-    appID: MoreApp.ID,
-    appStoreURL: URL
-  ) -> Effect<Action> {
-    .run { send in
       let didOpenStore = await openURL(appStoreURL)
       guard !Task.isCancelled else { return }
       await send(

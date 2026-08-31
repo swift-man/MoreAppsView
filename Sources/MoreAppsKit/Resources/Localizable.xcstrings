@@ -86,13 +86,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Learn more and continue to the App Store."
+            "value" : "Tries to open the app. If it can’t, opens its App Store page."
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "앱 정보를 확인하고 App Store로 이동합니다."
+            "value" : "앱 열기를 시도하고, 열 수 없으면 App Store 페이지를 엽니다."
           }
         }
       }
@@ -102,13 +102,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "View on the App Store"
+            "value" : "Open App or View on the App Store"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "App Store에서 보기"
+            "value" : "앱 열기 또는 App Store에서 보기"
           }
         }
       }

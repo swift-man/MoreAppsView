@@ -42,7 +42,7 @@
       self.onFinish = onFinish
       self.representedAppID = app.id
       super.init(nibName: nil, bundle: nil)
-      preferredContentSize = CGSize(width: 1_100, height: 620)
+      modalPresentationStyle = .fullScreen
     }
 
     @available(*, unavailable)
@@ -65,6 +65,10 @@
     override func viewDidAppear(_ animated: Bool) {
       super.viewDidAppear(animated)
       UIAccessibility.post(notification: .screenChanged, argument: nameLabel)
+    }
+
+    override var preferredFocusEnvironments: [any UIFocusEnvironment] {
+      [storeButton]
     }
 
     override func viewDidDisappear(_ animated: Bool) {
