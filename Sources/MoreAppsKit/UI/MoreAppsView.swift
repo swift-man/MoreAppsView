@@ -64,7 +64,8 @@ public final class MoreAppsView: UIView {
   /// Creates a More Apps view with the package's platform presenter.
   ///
   /// Use this initializer with ``MoreAppsSelectionBehavior/platformPresentation``
-  /// to present an App Store overlay on iOS or an app-detail sheet on tvOS.
+  /// to present an App Store overlay on iOS or a full-screen app preview on
+  /// tvOS.
   /// The presenter keeps only a weak reference to the supplied view controller.
   ///
   /// - Parameters:

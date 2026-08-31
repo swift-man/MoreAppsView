@@ -291,8 +291,69 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testTVOSPlatformPresentationWaitsForExplicitStoreAction() async {
+  func testTVOSExplicitActionOpensInstalledAppBeforeAppStore() async {
     let openRecorder = OpenRecorder(results: [true])
+    let presentationRecorder = PresentationRecorder(
+      outcomes: [.appStoreRequested]
+    )
+    let store = makePlatformStore(
+      app: TestFixtures.app(platforms: [.tvOS]),
+      platform: .tvOS,
+      openRecorder: openRecorder,
+      presentationRecorder: presentationRecorder
+    )
+
+    await store.send(.selected(appID: "sample")) {
+      $0.presentingAppID = "sample"
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: "sample"))
+      ]
+    }
+    await store.receive({ action in
+      guard
+        case .presentationFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStoreRequested
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.presentingAppID = nil
+      $0.openingAppIDs = ["sample"]
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .app
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .openedApp(appID: "sample"))
+      )
+    }
+
+    #expect(openRecorder.openedURLs == [TestFixtures.deepLinkURL])
+    #expect(presentationRecorder.requests.count == 1)
+    #expect(
+      presentationRecorder.requests.first?.appStoreIdentifier == "200"
+    )
+  }
+
+  @Test
+  func testTVOSExplicitActionFallsBackToAppStore() async {
+    let openRecorder = OpenRecorder(results: [false, true])
     let presentationRecorder = PresentationRecorder(
       outcomes: [.appStoreRequested]
     )
@@ -344,11 +405,130 @@ struct MoreAppsFeatureTests {
       )
     }
 
+    #expect(
+      openRecorder.openedURLs
+        == [TestFixtures.deepLinkURL, TestFixtures.tvOSStoreURL]
+    )
+    #expect(presentationRecorder.requests.count == 1)
+  }
+
+  @Test
+  func testTVOSExplicitActionWithoutDeepLinkOpensAppStore() async {
+    let openRecorder = OpenRecorder(results: [true])
+    let presentationRecorder = PresentationRecorder(
+      outcomes: [.appStoreRequested]
+    )
+    let store = makePlatformStore(
+      app: TestFixtures.app(platforms: [.tvOS], deepLinkURL: nil),
+      platform: .tvOS,
+      openRecorder: openRecorder,
+      presentationRecorder: presentationRecorder
+    )
+
+    await store.send(.selected(appID: "sample")) {
+      $0.presentingAppID = "sample"
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: "sample"))
+      ]
+    }
+    await store.receive({ action in
+      guard
+        case .presentationFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStoreRequested
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.presentingAppID = nil
+      $0.openingAppIDs = ["sample"]
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .openedAppStore(appID: "sample"))
+      )
+    }
+
     #expect(openRecorder.openedURLs == [TestFixtures.tvOSStoreURL])
     #expect(presentationRecorder.requests.count == 1)
-    #expect(
-      presentationRecorder.requests.first?.appStoreIdentifier == "200"
+  }
+
+  @Test
+  func testTVOSExplicitActionReportsFailureWhenNoDestinationOpens() async {
+    let openRecorder = OpenRecorder(results: [false, false])
+    let presentationRecorder = PresentationRecorder(
+      outcomes: [.appStoreRequested]
     )
+    let store = makePlatformStore(
+      app: TestFixtures.app(platforms: [.tvOS]),
+      platform: .tvOS,
+      openRecorder: openRecorder,
+      presentationRecorder: presentationRecorder
+    )
+
+    await store.send(.selected(appID: "sample")) {
+      $0.presentingAppID = "sample"
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: "sample"))
+      ]
+    }
+    await store.receive({ action in
+      guard
+        case .presentationFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStoreRequested
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.presentingAppID = nil
+      $0.openingAppIDs = ["sample"]
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .failed
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .failedToOpen(appID: "sample"))
+      )
+    }
+
+    #expect(
+      openRecorder.openedURLs
+        == [TestFixtures.deepLinkURL, TestFixtures.tvOSStoreURL]
+    )
+    #expect(presentationRecorder.requests.count == 1)
   }
 
   @Test

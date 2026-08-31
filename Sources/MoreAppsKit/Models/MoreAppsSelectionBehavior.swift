@@ -13,10 +13,11 @@ public enum MoreAppsSelectionBehavior: Equatable, Sendable {
   /// Opens the installed app and falls back directly to its App Store URL.
   case directOpen
 
-  /// Uses the platform's recommended presentation before handing off to the store.
+  /// Uses platform-specific presentation before handing off to a destination.
   ///
   /// On iOS, MoreAppsKit tries the app's deep link first and then presents an
-  /// App Store overlay. On tvOS, it presents an app-detail sheet with an
-  /// explicit App Store action.
+  /// App Store overlay. On tvOS, it presents a full-screen app preview whose
+  /// explicit action tries the installed app before falling back to the App
+  /// Store URL.
   case platformPresentation
 }

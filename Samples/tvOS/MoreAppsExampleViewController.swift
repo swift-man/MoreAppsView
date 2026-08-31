@@ -11,6 +11,8 @@ import UIKit
 
 @MainActor
 final class MoreAppsExampleViewController: UIViewController {
+  // Selecting a card presents a full-screen preview. Its explicit action opens
+  // an installed app first, then falls back to the system App Store app.
   private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       title: "More Apps on Apple TV",

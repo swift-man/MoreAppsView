@@ -39,7 +39,11 @@ public struct MoreAppsPresentationRequest: Equatable, Sendable {
 
 /// The result of presenting an App Store destination.
 public enum MoreAppsPresentationOutcome: Equatable, Sendable {
-  /// The user requested that MoreAppsKit open the App Store destination.
+  /// The user requested that MoreAppsKit continue to the app destination.
+  ///
+  /// On tvOS, MoreAppsKit first tries the destination's validated deep link and
+  /// falls back to its validated App Store URL when the app is not installed.
+  /// On iOS, this requests the validated App Store URL directly.
   case appStoreRequested
 
   /// The presentation lifecycle ended without requesting a URL handoff.
@@ -62,7 +66,7 @@ public protocol MoreAppsPresenting: AnyObject, Sendable {
   /// When the task is cancelled, dismiss any active UI and return
   /// ``MoreAppsPresentationOutcome/dismissed``.
   /// Return ``MoreAppsPresentationOutcome/appStoreRequested`` only when the
-  /// package should perform the validated App Store URL handoff.
+  /// package should continue to the validated app destination.
   ///
   /// - Parameter request: The app and destination to present.
   /// - Returns: The outcome reported by the presentation UI.
