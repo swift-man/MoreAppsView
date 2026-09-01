@@ -21,9 +21,9 @@ public struct MoreAppDestination: Codable, Hashable, Sendable {
 
   /// An optional promotional image shown while this destination is focused.
   ///
-  /// Hosts can render this image with ``MoreAppsFocusedBackgroundView``. The
-  /// value is platform-specific so one shared catalog can provide artwork with
-  /// the correct aspect ratio for each destination.
+  /// On tvOS, ``MoreAppsView`` can render this image with
+  /// ``MoreAppsFocusedBackgroundView``. The value remains platform-specific so
+  /// shared catalogs can keep artwork associated with the matching destination.
   public let backgroundImageURL: URL?
 
   /// Creates a platform-specific destination.

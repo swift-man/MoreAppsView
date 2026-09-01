@@ -212,13 +212,14 @@ final class TVAppsViewController: UIViewController {
 ```
 
 When the focused destination has a `backgroundImageURL`, the host-owned
-`MoreAppsFocusedBackgroundView` loads a 1920-pixel image, applies a dark legibility
-overlay, and crossfades it behind the cards. Focus changes cancel stale work, and
-Reduce Motion disables the crossfade. A destination without artwork clears the
-previous image instead of showing another app's screenshot. The sample catalog
-uses Andromeda 17K's first App Store tvOS screenshot; for production catalogs,
-hosting approved artwork on a URL you control avoids depending on a storefront
-asset URL remaining stable.
+`MoreAppsFocusedBackgroundView` requests artwork with a maximum decoded dimension
+of 1,920 pixels by default, applies a dark legibility overlay, and crossfades it
+behind the cards. Focus changes cancel stale work, and Reduce Motion disables the
+crossfade.
+A destination without artwork clears the previous image instead of showing another
+app's screenshot. The sample catalog uses Andromeda 17K's first App Store tvOS
+screenshot; for production catalogs, hosting approved artwork on a URL you control
+avoids depending on a storefront asset URL remaining stable.
 
 Selecting a card immediately tries the validated deep link. If the system accepts
 it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
@@ -257,9 +258,9 @@ Call `await moreAppsView.reload()` to fetch again with the most recently supplie
 provider. Starting another provider load cancels the prior TCA effect so a stale
 response cannot replace newer state.
 
-The optional `backgroundImageURL` belongs to each platform destination, so iOS
-and tvOS can supply different aspect ratios without duplicating the app entry.
-Older catalogs that omit it continue to decode. The JSON schema is demonstrated in
+The optional `backgroundImageURL` belongs to each platform destination. The built-in
+focus-background synchronization reads it from the matching tvOS destination, and
+older catalogs that omit it continue to decode. The JSON schema is demonstrated in
 [Samples/RemoteJSON/more-apps.json](Samples/RemoteJSON/more-apps.json).
 An unknown platform string fails decoding instead of accidentally exposing an app
 on the wrong platform.

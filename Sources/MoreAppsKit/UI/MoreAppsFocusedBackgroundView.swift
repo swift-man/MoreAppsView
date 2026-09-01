@@ -8,7 +8,7 @@
 
 import UIKit
 
-/// A full-screen image view synchronized with the focused ``MoreAppsView`` card.
+/// A full-screen image view synchronized with the focused tvOS ``MoreAppsView`` card.
 ///
 /// Add this view behind the rest of a host's interface and assign it to
 /// ``MoreAppsView/focusedBackgroundView``. Artwork is loaded only when the
