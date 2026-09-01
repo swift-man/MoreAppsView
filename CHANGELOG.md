@@ -17,6 +17,8 @@
   fallback behavior.
 - Use Andromeda 17K's first tvOS App Store screenshot in the sample catalog and decode
   full-screen artwork independently from card-sized icons.
+- Keep the current tvOS background visible until its replacement succeeds, and avoid
+  caching decoded artwork whose actual bitmap cost exceeds the memory-cache budget.
 
 ## [0.2.0] - 2026-08-23
 

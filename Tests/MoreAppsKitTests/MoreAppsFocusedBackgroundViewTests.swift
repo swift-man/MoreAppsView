@@ -60,6 +60,72 @@ struct MoreAppsFocusedBackgroundViewTests {
   }
 
   @Test
+  func testPreviousImageRemainsVisibleUntilReplacementLoads() async {
+    let firstURL = URL(string: "https://example.com/first.png")!
+    let secondURL = URL(string: "https://example.com/second.png")!
+    let firstImage = UIImage(systemName: "1.circle")!
+    let secondImage = UIImage(systemName: "2.circle")!
+    let secondImageGate = BackgroundImageGate()
+    let view = makeView { url, _ in
+      if url == secondURL {
+        return await secondImageGate.image(afterRelease: secondImage)
+      }
+      return firstImage
+    }
+
+    view.display(appID: "first", imageURL: firstURL, animated: false)
+    await waitUntilImageRequestFinishes(in: view)
+    view.display(appID: "second", imageURL: secondURL, animated: false)
+    await secondImageGate.waitUntilStarted()
+
+    #expect(view.displayedAppID == "first")
+    #expect(view.displayedImage === firstImage)
+
+    secondImageGate.release()
+    await waitUntilImageRequestFinishes(in: view)
+
+    #expect(view.displayedAppID == "second")
+    #expect(view.displayedImage === secondImage)
+  }
+
+  @Test
+  func testFocusChangeCancelsThePreviousImageTask() async {
+    var didStart = false
+    var cancellationCount = 0
+    let view = makeView { _, _ in
+      didStart = true
+      do {
+        try await Task.sleep(for: .seconds(60))
+        return UIImage(systemName: "sparkles")!
+      } catch is CancellationError {
+        cancellationCount += 1
+        throw CancellationError()
+      }
+    }
+
+    view.display(
+      appID: "andromeda",
+      imageURL: TestFixtures.backgroundImageURL,
+      animated: false
+    )
+    let clock = ContinuousClock()
+    let startDeadline = clock.now.advanced(by: .seconds(1))
+    while !didStart, clock.now < startDeadline {
+      await Task.yield()
+    }
+    #expect(didStart)
+
+    view.display(appID: nil, imageURL: nil, animated: false)
+    let cancellationDeadline = clock.now.advanced(by: .seconds(1))
+    while cancellationCount == 0, clock.now < cancellationDeadline {
+      await Task.yield()
+    }
+
+    #expect(cancellationCount == 1)
+    #expect(view.displayedImage == nil)
+  }
+
+  @Test
   func testStaleImageCannotOverwriteTheLatestFocus() async {
     let firstURL = URL(string: "https://example.com/first.png")!
     let secondURL = URL(string: "https://example.com/second.png")!
@@ -132,6 +198,27 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
+    await waitUntilImageRequestFinishes(in: view)
+
+    #expect(view.displayedAppID == nil)
+    #expect(view.displayedImage == nil)
+  }
+
+  @Test
+  func testFailedReplacementClearsThePreviousImage() async {
+    let firstURL = URL(string: "https://example.com/first.png")!
+    let secondURL = URL(string: "https://example.com/second.png")!
+    let firstImage = UIImage(systemName: "1.circle")!
+    let view = makeView { url, _ in
+      guard url == firstURL else {
+        throw MoreAppsImageLoadingError.decodingFailed
+      }
+      return firstImage
+    }
+
+    view.display(appID: "first", imageURL: firstURL, animated: false)
+    await waitUntilImageRequestFinishes(in: view)
+    view.display(appID: "second", imageURL: secondURL, animated: false)
     await waitUntilImageRequestFinishes(in: view)
 
     #expect(view.displayedAppID == nil)

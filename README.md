@@ -214,10 +214,10 @@ final class TVAppsViewController: UIViewController {
 When the focused destination has a `backgroundImageURL`, the host-owned
 `MoreAppsFocusedBackgroundView` requests artwork with a maximum decoded dimension
 of 1,920 pixels by default, applies a dark legibility overlay, and crossfades it
-behind the cards. Focus changes cancel stale work, and Reduce Motion disables the
-crossfade.
-A destination without artwork clears the previous image instead of showing another
-app's screenshot. The sample catalog uses Andromeda 17K's first App Store tvOS
+behind the cards. Focus changes cancel stale work and keep the current image visible
+until its replacement succeeds; a load failure or destination without artwork clears
+the previous image. Reduce Motion disables the crossfade. The sample catalog uses
+Andromeda 17K's first App Store tvOS
 screenshot; for production catalogs, hosting approved artwork on a URL you control
 avoids depending on a storefront asset URL remaining stable.
 

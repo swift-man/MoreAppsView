@@ -35,6 +35,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
   private var imageTask: Task<Void, Never>?
   private var requestedAppID: MoreApp.ID?
   private var requestedImageURL: URL?
+  private var renderedAppID: MoreApp.ID?
   private var requestGeneration: UInt = 0
 
   /// The opacity of the black overlay placed above focused artwork.
@@ -156,9 +157,11 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     let generation = requestGeneration
     requestedAppID = appID
     requestedImageURL = imageURL
-    setImage(nil, animated: animated)
 
-    guard let appID, let imageURL else { return }
+    guard let appID, let imageURL else {
+      setImage(nil, appID: nil, animated: animated)
+      return
+    }
 
     imageTask = Task { [weak self, imageProvider, maximumPixelSize] in
       do {
@@ -172,7 +175,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
           return
         }
         self.imageTask = nil
-        self.setImage(image, animated: animated)
+        self.setImage(image, appID: appID, animated: animated)
       } catch {
         guard let self,
           self.requestGeneration == generation,
@@ -182,7 +185,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
           return
         }
         self.imageTask = nil
-        self.setImage(nil, animated: animated)
+        self.setImage(nil, appID: nil, animated: animated)
       }
     }
   }
@@ -192,7 +195,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
   }
 
   var displayedAppID: MoreApp.ID? {
-    imageView.image == nil ? nil : requestedAppID
+    renderedAppID
   }
 
   var isLoadingImage: Bool {
@@ -232,7 +235,12 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     ])
   }
 
-  private func setImage(_ image: UIImage?, animated: Bool) {
+  private func setImage(
+    _ image: UIImage?,
+    appID: MoreApp.ID?,
+    animated: Bool
+  ) {
+    renderedAppID = image == nil ? nil : appID
     let targetDimmingAlpha = image == nil ? 0 : dimmingAlpha
     guard
       imageView.image !== image

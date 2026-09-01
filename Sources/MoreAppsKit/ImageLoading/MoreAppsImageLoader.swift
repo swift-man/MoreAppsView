@@ -13,6 +13,7 @@ import UIKit
 
 private let moreAppsDefaultMaximumDecodedPixelSize = 512
 private let moreAppsImageCacheCostLimit = 32 * 1_024 * 1_024
+private let moreAppsMaximumResponseByteCount = 8 * 1_024 * 1_024
 private let moreAppsImageDecoder = MoreAppsImageDecoder()
 
 func moreAppsClampedDecodedPixelSize(_ pixelSize: Int) -> Int {
@@ -59,8 +60,6 @@ public enum MoreAppsImageLoadingError: Error, Equatable, LocalizedError, Sendabl
 }
 
 private actor MoreAppsImageRepository {
-  private static let defaultMaximumResponseByteCount = 8 * 1_024 * 1_024
-
   private struct InFlightRequest {
     let id: UInt
     let generation: UInt
@@ -78,8 +77,7 @@ private actor MoreAppsImageRepository {
 
   init(
     sessionConfiguration: URLSessionConfiguration,
-    maximumResponseByteCount: Int = MoreAppsImageRepository
-      .defaultMaximumResponseByteCount,
+    maximumResponseByteCount: Int = moreAppsMaximumResponseByteCount,
     onWaiterAdded: @escaping @Sendable (URL, Int) -> Void = { _, _ in }
   ) {
     self.session = Session(configuration: sessionConfiguration)
@@ -464,7 +462,7 @@ public final class MoreAppsImageLoader {
 
   convenience init(
     sessionConfiguration: URLSessionConfiguration,
-    maximumResponseByteCount: Int = 8 * 1_024 * 1_024,
+    maximumResponseByteCount: Int = moreAppsMaximumResponseByteCount,
     onDataWaiterAdded: @escaping @Sendable (URL, Int) -> Void = { _, _ in },
     sizedImageDecoder: @escaping @Sendable (Data, Int) async -> UIImage?
   ) {
@@ -480,7 +478,7 @@ public final class MoreAppsImageLoader {
 
   convenience init(
     sessionConfiguration: URLSessionConfiguration,
-    maximumResponseByteCount: Int = 8 * 1_024 * 1_024,
+    maximumResponseByteCount: Int = moreAppsMaximumResponseByteCount,
     imageDecoder: @escaping @Sendable (Data) async -> UIImage?
   ) {
     self.init(
@@ -678,11 +676,14 @@ public final class MoreAppsImageLoader {
     }
 
     if case .success(let image) = result {
-      imageCache.setObject(
-        image,
-        forKey: key.cacheKey,
-        cost: Self.decodedCost(of: image)
-      )
+      let decodedCost = Self.decodedCost(of: image)
+      if Self.isCacheable(decodedCost: decodedCost) {
+        imageCache.setObject(
+          image,
+          forKey: key.cacheKey,
+          cost: decodedCost
+        )
+      }
     }
     request.waiters.values.forEach { $0.resume(with: result) }
   }
@@ -721,11 +722,21 @@ public final class MoreAppsImageLoader {
 
   private nonisolated static func decodedCost(of image: UIImage) -> Int {
     guard let cgImage = image.cgImage else { return 0 }
-    let (cost, overflow) = cgImage.bytesPerRow.multipliedReportingOverflow(
-      by: cgImage.height
+    return decodedCost(
+      bytesPerRow: cgImage.bytesPerRow,
+      height: cgImage.height
     )
-    return overflow
-      ? moreAppsImageCacheCostLimit
-      : min(cost, moreAppsImageCacheCostLimit)
+  }
+
+  nonisolated static func decodedCost(
+    bytesPerRow: Int,
+    height: Int
+  ) -> Int {
+    let (cost, overflow) = bytesPerRow.multipliedReportingOverflow(by: height)
+    return overflow ? .max : cost
+  }
+
+  nonisolated static func isCacheable(decodedCost: Int) -> Bool {
+    decodedCost <= moreAppsImageCacheCostLimit
   }
 }

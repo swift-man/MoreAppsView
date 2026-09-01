@@ -417,6 +417,28 @@ struct MoreAppsImageLoaderTests {
   }
 
   @Test
+  func testOversizedDecodedBitmapIsNotCacheable() {
+    let fourKSquareCost = MoreAppsImageLoader.decodedCost(
+      bytesPerRow: 4_096 * 4,
+      height: 4_096
+    )
+
+    #expect(fourKSquareCost == 64 * 1_024 * 1_024)
+    #expect(!MoreAppsImageLoader.isCacheable(decodedCost: fourKSquareCost))
+    #expect(
+      MoreAppsImageLoader.isCacheable(
+        decodedCost: 32 * 1_024 * 1_024
+      )
+    )
+    #expect(
+      MoreAppsImageLoader.decodedCost(
+        bytesPerRow: .max,
+        height: 2
+      ) == .max
+    )
+  }
+
+  @Test
   func testCancellingOnePixelSizeKeepsSharedTransportForAnother() async throws {
     let responseGate = ImageResponseGate()
     defer {
