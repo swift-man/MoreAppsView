@@ -325,7 +325,7 @@ not require a presenter.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
 - `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable iOS StoreKit
   presentation without expanding the URL opener's responsibility.
-- `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in platform UI.
+- `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in iOS StoreKit UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
   background decoding, and memory caching.

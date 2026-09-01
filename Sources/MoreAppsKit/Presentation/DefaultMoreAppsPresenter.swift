@@ -70,7 +70,7 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
     self.init(presentingViewController: presentingViewController)
   }
 
-  /// Presents the platform-appropriate App Store experience.
+  /// Presents the system App Store experience when the platform supports it.
   ///
   /// - Parameter request: The app and destination to present.
   /// - Returns: The outcome reported by StoreKit, or `failed` on tvOS where

@@ -39,7 +39,7 @@ public struct MoreAppsPresentationRequest: Equatable, Sendable {
 
 /// The result of presenting an App Store destination.
 public enum MoreAppsPresentationOutcome: Equatable, Sendable {
-  /// The user requested that MoreAppsKit continue to the app destination.
+  /// The user requested that MoreAppsKit continue to the App Store destination.
   case appStoreRequested
 
   /// The presentation lifecycle ended without requesting a URL handoff.
