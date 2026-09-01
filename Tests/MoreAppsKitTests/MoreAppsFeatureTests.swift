@@ -498,6 +498,64 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
+  func testIOSAppStoreRequestOpensAppStoreURL() async {
+    let openRecorder = OpenRecorder(results: [true])
+    let presentationRecorder = PresentationRecorder(
+      outcomes: [.appStoreRequested]
+    )
+    let store = makePlatformStore(
+      app: TestFixtures.app(deepLinkURL: nil),
+      platform: .iOS,
+      openRecorder: openRecorder,
+      presentationRecorder: presentationRecorder
+    )
+
+    await store.send(.selected(appID: "sample")) {
+      $0.presentingAppID = "sample"
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: "sample"))
+      ]
+    }
+    await store.receive({ action in
+      guard
+        case .presentationFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStoreRequested
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.presentingAppID = nil
+      $0.openingAppIDs = ["sample"]
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .openedAppStore(appID: "sample"))
+      )
+    }
+
+    #expect(openRecorder.openedURLs == [TestFixtures.iOSStoreURL])
+    #expect(presentationRecorder.requests.count == 1)
+  }
+
+  @Test
   func testIOSPresentationFailureFallsBackToAppStoreURL() async {
     let openRecorder = OpenRecorder(results: [true])
     let presentationRecorder = PresentationRecorder(outcomes: [.failed])

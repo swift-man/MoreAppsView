@@ -7,6 +7,9 @@
 //
 
 import Testing
+#if os(tvOS)
+  import UIKit
+#endif
 
 @testable import MoreAppsKit
 
@@ -81,6 +84,21 @@ struct MoreAppsPresentationTests {
       #expect(outcome == .failed)
       #expect(duplicateOutcome == nil)
       #expect(!state.isDismissalRequested)
+    }
+  #endif
+
+  #if os(tvOS)
+    @Test
+    func testDefaultPresenterDoesNotPresentUIOnTVOS() async {
+      let host = UIViewController()
+      let presenter = DefaultMoreAppsPresenter(
+        presentingViewController: host
+      )
+
+      let outcome = await presenter.present(makeRequest())
+
+      #expect(outcome == .failed)
+      #expect(host.presentedViewController == nil)
     }
   #endif
 
