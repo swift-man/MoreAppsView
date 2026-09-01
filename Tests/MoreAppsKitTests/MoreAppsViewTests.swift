@@ -14,6 +14,68 @@ import UIKit
 @MainActor
 @Suite
 struct MoreAppsViewTests {
+  #if os(tvOS)
+    @Test
+    func testTVOSFocusUpdatesTheHostOwnedBackgroundView() async {
+      let image = UIImage(systemName: "sparkles")!
+      let backgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in image }
+      )
+      let view = MoreAppsView()
+      view.focusedBackgroundView = backgroundView
+      view.setApps([
+        TestFixtures.app(
+          platforms: [.tvOS],
+          backgroundImageURL: TestFixtures.backgroundImageURL
+        )
+      ])
+      await Task.yield()
+
+      view.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+      let clock = ContinuousClock()
+      let deadline = clock.now.advanced(by: .seconds(1))
+      while backgroundView.displayedAppID != "sample",
+        clock.now < deadline
+      {
+        await Task.yield()
+      }
+
+      #expect(backgroundView.displayedAppID == "sample")
+      #expect(backgroundView.displayedImage === image)
+
+      let replacementBackgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in image }
+      )
+      view.focusedBackgroundView = replacementBackgroundView
+      let replacementDeadline = clock.now.advanced(by: .seconds(1))
+      while replacementBackgroundView.displayedAppID != "sample",
+        clock.now < replacementDeadline
+      {
+        await Task.yield()
+      }
+      #expect(backgroundView.displayedImage == nil)
+      #expect(replacementBackgroundView.displayedAppID == "sample")
+
+      view.focusedBackgroundView = replacementBackgroundView
+      await Task.yield()
+      #expect(replacementBackgroundView.displayedAppID == "sample")
+
+      view.updateFocusedApp(at: nil)
+      await Task.yield()
+      #expect(replacementBackgroundView.displayedImage == nil)
+    }
+  #endif
+
   @Test
   func testHidesWhenEmptyAndShowsWhenDisplayable() async {
     let view = MoreAppsView(

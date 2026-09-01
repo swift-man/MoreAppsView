@@ -88,7 +88,14 @@ let apps = [
         appStoreURL: URL(
           string: "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129"
         )!,
-        deepLinkURL: URL(string: "andromeda17k://")
+        deepLinkURL: URL(string: "andromeda17k://"),
+        backgroundImageURL: URL(
+          string: "https://is1-ssl.mzstatic.com/image/thumb/"
+            + "PurpleSource221/v4/f2/47/f8/"
+            + "f247f87c-b756-f833-1307-aee7f81f65db/"
+            + "Simulator_Screenshot_-_Apple_TV_4K__U00283rd_generation_U0029_-_"
+            + "2026-07-29_at_15.54.24.png/1920x1080bb.png"
+        )
       )
     ],
     sortOrder: 20
@@ -169,6 +176,8 @@ Motion is enabled.
 
 ```swift
 final class TVAppsViewController: UIViewController {
+  private let focusedBackgroundView = MoreAppsFocusedBackgroundView()
+
   private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       title: "More Apps on Apple TV",
@@ -180,10 +189,36 @@ final class TVAppsViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+
+    focusedBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+    moreAppsView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(focusedBackgroundView)
+    view.addSubview(moreAppsView)
+    moreAppsView.focusedBackgroundView = focusedBackgroundView
+
+    NSLayoutConstraint.activate([
+      focusedBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+      focusedBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      focusedBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      focusedBackgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      moreAppsView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+    ])
+
     moreAppsView.setApps(sharedCatalog)
   }
 }
 ```
+
+When the focused destination has a `backgroundImageURL`, the host-owned
+`MoreAppsFocusedBackgroundView` loads a 1920-pixel image, applies a dark legibility
+overlay, and crossfades it behind the cards. Focus changes cancel stale work, and
+Reduce Motion disables the crossfade. A destination without artwork clears the
+previous image instead of showing another app's screenshot. The sample catalog
+uses Andromeda 17K's first App Store tvOS screenshot; for production catalogs,
+hosting approved artwork on a URL you control avoids depending on a storefront
+asset URL remaining stable.
 
 Selecting a card immediately tries the validated deep link. If the system accepts
 it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
@@ -222,7 +257,9 @@ Call `await moreAppsView.reload()` to fetch again with the most recently supplie
 provider. Starting another provider load cancels the prior TCA effect so a stale
 response cannot replace newer state.
 
-The JSON schema is demonstrated in
+The optional `backgroundImageURL` belongs to each platform destination, so iOS
+and tvOS can supply different aspect ratios without duplicating the app entry.
+Older catalogs that omit it continue to decode. The JSON schema is demonstrated in
 [Samples/RemoteJSON/more-apps.json](Samples/RemoteJSON/more-apps.json).
 An unknown platform string fails decoding instead of accidentally exposing an app
 on the wrong platform.
@@ -328,8 +365,10 @@ not require a presenter.
 - `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in iOS StoreKit UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
-  background decoding, and memory caching.
-- `MoreAppsView`: UIKit entry point with `setApps`, `load`, `reload`, and `onEvent`.
+  size-aware background decoding, and memory caching.
+- `MoreAppsFocusedBackgroundView`: optional host-owned full-screen focus artwork.
+- `MoreAppsView`: UIKit entry point with `setApps`, `load`, `reload`, `onEvent`, and
+  focus-background synchronization.
 - `MoreAppsSwiftUIView`: SwiftUI adapter around `MoreAppsView`.
 
 Every public declaration includes DocC documentation in source. Internal reducers,

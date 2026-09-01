@@ -23,6 +23,7 @@ struct MoreAppsFeature: Reducer {
     var impressedAppIDs = Set<MoreApp.ID>()
     var openingAppIDs = Set<MoreApp.ID>()
     var presentingAppID: MoreApp.ID?
+    var focusedAppID: MoreApp.ID?
     var pendingEvents: [EventEnvelope] = []
     var dataSessionID = 0
     var nextEventID = 0
@@ -49,6 +50,7 @@ struct MoreAppsFeature: Reducer {
     case loadSucceeded(id: Int, apps: [MoreApp])
     case loadFailed(id: Int, message: String)
     case itemBecameVisible(appID: MoreApp.ID)
+    case focusChanged(appID: MoreApp.ID?)
     case selected(appID: MoreApp.ID)
     case openFinished(
       dataSessionID: Int,
@@ -183,6 +185,14 @@ struct MoreAppsFeature: Reducer {
         enqueue(.impression(appID: appID), in: &state)
         return .none
 
+      case .focusChanged(let appID):
+        state.focusedAppID = appID.flatMap { candidateID in
+          state.apps.contains(where: { $0.id == candidateID })
+            ? candidateID
+            : nil
+        }
+        return .none
+
       case .selected(let appID):
         guard !state.openingAppIDs.contains(appID),
           state.presentingAppID == nil,
@@ -229,7 +239,8 @@ struct MoreAppsFeature: Reducer {
             destination: MoreAppDestination(
               platform: destination.platform,
               appStoreURL: appStoreURL,
-              deepLinkURL: deepLinkURL
+              deepLinkURL: deepLinkURL,
+              backgroundImageURL: destination.backgroundImageURL
             ),
             appStoreIdentifier: MoreAppsURLPolicy.appStoreIdentifier(
               from: appStoreURL
@@ -358,6 +369,11 @@ struct MoreAppsFeature: Reducer {
       state.impressedAppIDs.removeAll()
       state.openingAppIDs.removeAll()
       state.presentingAppID = nil
+    }
+    if let focusedAppID = state.focusedAppID,
+      !state.apps.contains(where: { $0.id == focusedAppID })
+    {
+      state.focusedAppID = nil
     }
   }
 

@@ -16,6 +16,97 @@ import Testing
 @Suite
 struct MoreAppsFeatureTests {
   @Test
+  func testFocusTracksOnlyAppsInTheFilteredCatalog() async {
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.apps = [TestFixtures.app()]
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    }
+
+    await store.send(.focusChanged(appID: "sample")) {
+      $0.focusedAppID = "sample"
+    }
+    await store.send(.focusChanged(appID: "missing")) {
+      $0.focusedAppID = nil
+    }
+  }
+
+  @Test
+  func testFilteringOutTheFocusedAppClearsFocus() async {
+    let first = TestFixtures.app(id: "first", sortOrder: 0)
+    let second = TestFixtures.app(id: "second", sortOrder: 1)
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [first, second]
+    state.apps = [first, second]
+    state.focusedAppID = second.id
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setMaximumNumberOfItems(1)) {
+      $0.maximumNumberOfItems = 1
+      $0.apps = [first]
+      $0.focusedAppID = nil
+    }
+  }
+
+  @Test
+  func testNewCatalogClearsAFocusedAppThatWasRemoved() async {
+    let app = TestFixtures.app()
+    let replacement = TestFixtures.app(id: "replacement")
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [app]
+    state.apps = [app]
+    state.focusedAppID = app.id
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setApps([replacement])) {
+      $0.sourceApps = [replacement]
+      $0.apps = [replacement]
+      $0.dataSessionID = 1
+      $0.focusedAppID = nil
+    }
+  }
+
+  @Test
+  func testNewCatalogKeepsFocusForTheSameStableAppID() async {
+    let app = TestFixtures.app()
+    let updatedApp = TestFixtures.app(
+      backgroundImageURL: TestFixtures.backgroundImageURL
+    )
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [app]
+    state.apps = [app]
+    state.focusedAppID = app.id
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setApps([updatedApp])) {
+      $0.sourceApps = [updatedApp]
+      $0.apps = [updatedApp]
+      $0.dataSessionID = 1
+    }
+  }
+
+  @Test
   func testDeepLinkSuccessDoesNotOpenAppStore() async {
     let recorder = OpenRecorder(results: [true])
     let store = makeStore(
@@ -218,7 +309,9 @@ struct MoreAppsFeatureTests {
     let openRecorder = OpenRecorder(results: [false])
     let presentationRecorder = PresentationRecorder(outcomes: [.dismissed])
     let store = makePlatformStore(
-      app: TestFixtures.app(),
+      app: TestFixtures.app(
+        backgroundImageURL: TestFixtures.backgroundImageURL
+      ),
       platform: .iOS,
       openRecorder: openRecorder,
       presentationRecorder: presentationRecorder
@@ -250,6 +343,10 @@ struct MoreAppsFeatureTests {
     #expect(presentationRecorder.requests.count == 1)
     #expect(
       presentationRecorder.requests.first?.appStoreIdentifier == "100"
+    )
+    #expect(
+      presentationRecorder.requests.first?.destination.backgroundImageURL
+        == TestFixtures.backgroundImageURL
     )
   }
 

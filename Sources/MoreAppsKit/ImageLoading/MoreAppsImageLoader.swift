@@ -11,10 +11,25 @@ import Foundation
 import ImageIO
 import UIKit
 
-private let moreAppsMaximumDecodedPixelSize = 512
+private let moreAppsDefaultMaximumDecodedPixelSize = 512
 private let moreAppsImageCacheCostLimit = 32 * 1_024 * 1_024
+private let moreAppsImageDecoder = MoreAppsImageDecoder()
 
-/// An error produced while downloading or decoding an app icon.
+func moreAppsClampedDecodedPixelSize(_ pixelSize: Int) -> Int {
+  min(max(1, pixelSize), 4_096)
+}
+
+private actor MoreAppsImageDecoder {
+  func image(from data: Data, maximumPixelSize: Int) -> UIImage? {
+    guard !Task.isCancelled else { return nil }
+    return MoreAppsImageLoader.downsampledImage(
+      from: data,
+      maximumPixelSize: maximumPixelSize
+    )
+  }
+}
+
+/// An error produced while downloading or decoding remote app artwork.
 public enum MoreAppsImageLoadingError: Error, Equatable, LocalizedError, Sendable {
   /// The image URL does not use secure HTTPS transport.
   case insecureURL(URL)
@@ -55,6 +70,7 @@ private actor MoreAppsImageRepository {
 
   private let session: Session
   private let maximumResponseByteCount: Int
+  private let onWaiterAdded: @Sendable (URL, Int) -> Void
   private var inFlight: [URL: InFlightRequest] = [:]
   private var cacheGeneration: UInt = 0
   private var nextRequestID: UInt = 0
@@ -63,10 +79,12 @@ private actor MoreAppsImageRepository {
   init(
     sessionConfiguration: URLSessionConfiguration,
     maximumResponseByteCount: Int = MoreAppsImageRepository
-      .defaultMaximumResponseByteCount
+      .defaultMaximumResponseByteCount,
+    onWaiterAdded: @escaping @Sendable (URL, Int) -> Void = { _, _ in }
   ) {
     self.session = Session(configuration: sessionConfiguration)
     self.maximumResponseByteCount = maximumResponseByteCount
+    self.onWaiterAdded = onWaiterAdded
   }
 
   func data(for url: URL) async throws -> Data {
@@ -156,6 +174,7 @@ private actor MoreAppsImageRepository {
     }
     request.waiters[waiterID] = continuation
     inFlight[url] = request
+    onWaiterAdded(url, request.waiters.count)
   }
 
   private func cancelWaiter(
@@ -388,14 +407,24 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
   }
 }
 
-/// An Alamofire-backed, memory-caching app icon loader.
+/// An Alamofire-backed, memory-caching app artwork loader.
 ///
-/// Concurrent requests for the same URL share one download, decode, and cache
-/// publication task. Image decoding is performed away from the main actor.
+/// Concurrent requests for the same URL and decoded size share one download,
+/// decode, and cache publication task. Image decoding is performed away from
+/// the main actor.
 /// Cancelling one caller leaves shared work running for the remaining callers;
 /// cancelling the last caller cancels the shared task and HTTP request.
 @MainActor
 public final class MoreAppsImageLoader {
+  private struct ImageRequestKey: Hashable, Sendable {
+    let url: URL
+    let maximumPixelSize: Int
+
+    var cacheKey: NSString {
+      "\(url.absoluteString)#moreappskit-max=\(maximumPixelSize)" as NSString
+    }
+  }
+
   private struct InFlightImageRequest {
     let id: UInt
     let generation: UInt
@@ -403,13 +432,13 @@ public final class MoreAppsImageLoader {
     var waiters: [UInt: CheckedContinuation<UIImage, any Error>]
   }
 
-  /// The shared image loader used by ``MoreAppsView``.
+  /// The shared image loader used by MoreAppsKit views.
   public static let shared = MoreAppsImageLoader()
 
   private let repository: MoreAppsImageRepository
-  private let imageCache = NSCache<NSURL, UIImage>()
-  private let imageDecoder: @Sendable (Data) async -> UIImage?
-  private var inFlightImages: [URL: InFlightImageRequest] = [:]
+  private let imageCache = NSCache<NSString, UIImage>()
+  private let imageDecoder: @Sendable (Data, Int) async -> UIImage?
+  private var inFlightImages: [ImageRequestKey: InFlightImageRequest] = [:]
   private var cacheGeneration: UInt = 0
   private var nextImageRequestID: UInt = 0
   private var nextImageWaiterID: UInt = 0
@@ -417,29 +446,59 @@ public final class MoreAppsImageLoader {
   /// Creates an image loader.
   ///
   /// - Parameter sessionConfiguration: The configuration for Alamofire's URL session.
-  public init(
+  public convenience init(
     sessionConfiguration: URLSessionConfiguration = .default
   ) {
-    self.repository = MoreAppsImageRepository(
-      sessionConfiguration: sessionConfiguration
+    self.init(
+      repository: MoreAppsImageRepository(
+        sessionConfiguration: sessionConfiguration
+      ),
+      imageDecoder: { data, maximumPixelSize in
+        await moreAppsImageDecoder.image(
+          from: data,
+          maximumPixelSize: maximumPixelSize
+        )
+      }
     )
-    self.imageDecoder = { data in
-      await Task.detached(priority: .userInitiated) {
-        Self.downsampledImage(from: data)
-      }.value
-    }
-    self.imageCache.totalCostLimit = moreAppsImageCacheCostLimit
   }
 
-  init(
+  convenience init(
+    sessionConfiguration: URLSessionConfiguration,
+    maximumResponseByteCount: Int = 8 * 1_024 * 1_024,
+    onDataWaiterAdded: @escaping @Sendable (URL, Int) -> Void = { _, _ in },
+    sizedImageDecoder: @escaping @Sendable (Data, Int) async -> UIImage?
+  ) {
+    self.init(
+      repository: MoreAppsImageRepository(
+        sessionConfiguration: sessionConfiguration,
+        maximumResponseByteCount: maximumResponseByteCount,
+        onWaiterAdded: onDataWaiterAdded
+      ),
+      imageDecoder: sizedImageDecoder
+    )
+  }
+
+  convenience init(
     sessionConfiguration: URLSessionConfiguration,
     maximumResponseByteCount: Int = 8 * 1_024 * 1_024,
     imageDecoder: @escaping @Sendable (Data) async -> UIImage?
   ) {
-    self.repository = MoreAppsImageRepository(
-      sessionConfiguration: sessionConfiguration,
-      maximumResponseByteCount: maximumResponseByteCount
+    self.init(
+      repository: MoreAppsImageRepository(
+        sessionConfiguration: sessionConfiguration,
+        maximumResponseByteCount: maximumResponseByteCount
+      ),
+      imageDecoder: { data, _ in
+        await imageDecoder(data)
+      }
     )
+  }
+
+  private init(
+    repository: MoreAppsImageRepository,
+    imageDecoder: @escaping @Sendable (Data, Int) async -> UIImage?
+  ) {
+    self.repository = repository
     self.imageDecoder = imageDecoder
     self.imageCache.totalCostLimit = moreAppsImageCacheCostLimit
   }
@@ -450,12 +509,39 @@ public final class MoreAppsImageLoader {
   /// - Returns: A decoded UIKit image.
   /// - Throws: ``MoreAppsImageLoadingError`` or `CancellationError`.
   public func image(for url: URL) async throws -> UIImage {
-    if let image = imageCache.object(forKey: url as NSURL) {
+    try await image(
+      for: url,
+      maximumPixelSize: moreAppsDefaultMaximumDecodedPixelSize
+    )
+  }
+
+  /// Returns a cached or downloaded image downsampled for a target size.
+  ///
+  /// Requests for the same URL and target size share their download, decode,
+  /// and cache entry. Overlapping downloads for different sizes share
+  /// transport bytes but keep distinct decoded images so full-screen artwork
+  /// does not reuse a card-sized icon.
+  ///
+  /// - Parameters:
+  ///   - url: The remote image URL.
+  ///   - maximumPixelSize: The requested maximum decoded width or height in
+  ///     pixels. Values are clamped to `1...4096` to bound bitmap memory use.
+  /// - Returns: A decoded UIKit image.
+  /// - Throws: ``MoreAppsImageLoadingError`` or `CancellationError`.
+  public func image(
+    for url: URL,
+    maximumPixelSize: Int
+  ) async throws -> UIImage {
+    let key = ImageRequestKey(
+      url: url,
+      maximumPixelSize: moreAppsClampedDecodedPixelSize(maximumPixelSize)
+    )
+    if let image = imageCache.object(forKey: key.cacheKey) {
       return image
     }
 
     let requestID: UInt
-    if let request = inFlightImages[url] {
+    if let request = inFlightImages[key] {
       requestID = request.id
     } else {
       let generation = cacheGeneration
@@ -466,7 +552,12 @@ public final class MoreAppsImageLoader {
         do {
           let data = try await repository.data(for: url)
           try Task.checkCancellation()
-          guard let image = await imageDecoder(data) else {
+          guard
+            let image = await imageDecoder(
+              data,
+              key.maximumPixelSize
+            )
+          else {
             throw MoreAppsImageLoadingError.decodingFailed
           }
           try Task.checkCancellation()
@@ -475,13 +566,13 @@ public final class MoreAppsImageLoader {
           result = .failure(error)
         }
         self?.finishImageRequest(
-          for: url,
+          for: key,
           id: requestID,
           generation: generation,
           with: result
         )
       }
-      inFlightImages[url] = InFlightImageRequest(
+      inFlightImages[key] = InFlightImageRequest(
         id: requestID,
         generation: generation,
         task: task,
@@ -496,7 +587,7 @@ public final class MoreAppsImageLoader {
         continuation in
         addImageWaiter(
           continuation,
-          for: url,
+          for: key,
           requestID: requestID,
           waiterID: waiterID
         )
@@ -506,7 +597,7 @@ public final class MoreAppsImageLoader {
     } onCancel: { [weak self] in
       Task { @MainActor in
         self?.cancelImageWaiter(
-          for: url,
+          for: key,
           requestID: requestID,
           waiterID: waiterID
         )
@@ -531,26 +622,26 @@ public final class MoreAppsImageLoader {
 
   private func addImageWaiter(
     _ continuation: CheckedContinuation<UIImage, any Error>,
-    for url: URL,
+    for key: ImageRequestKey,
     requestID: UInt,
     waiterID: UInt
   ) {
-    guard var request = inFlightImages[url],
+    guard var request = inFlightImages[key],
       request.id == requestID
     else {
       continuation.resume(throwing: CancellationError())
       return
     }
     request.waiters[waiterID] = continuation
-    inFlightImages[url] = request
+    inFlightImages[key] = request
   }
 
   private func cancelImageWaiter(
-    for url: URL,
+    for key: ImageRequestKey,
     requestID: UInt,
     waiterID: UInt
   ) {
-    guard var request = inFlightImages[url],
+    guard var request = inFlightImages[key],
       request.id == requestID,
       let continuation = request.waiters.removeValue(
         forKey: waiterID
@@ -560,22 +651,22 @@ public final class MoreAppsImageLoader {
     }
 
     if request.waiters.isEmpty {
-      inFlightImages[url] = nil
+      inFlightImages[key] = nil
       request.task.cancel()
     } else {
-      inFlightImages[url] = request
+      inFlightImages[key] = request
     }
     continuation.resume(throwing: CancellationError())
   }
 
   private func finishImageRequest(
-    for url: URL,
+    for key: ImageRequestKey,
     id: UInt,
     generation: UInt,
     with result: Result<UIImage, any Error>
   ) {
-    guard let request = inFlightImages[url], request.id == id else { return }
-    inFlightImages[url] = nil
+    guard let request = inFlightImages[key], request.id == id else { return }
+    inFlightImages[key] = nil
 
     guard generation == cacheGeneration,
       request.generation == cacheGeneration
@@ -589,14 +680,17 @@ public final class MoreAppsImageLoader {
     if case .success(let image) = result {
       imageCache.setObject(
         image,
-        forKey: url as NSURL,
+        forKey: key.cacheKey,
         cost: Self.decodedCost(of: image)
       )
     }
     request.waiters.values.forEach { $0.resume(with: result) }
   }
 
-  private nonisolated static func downsampledImage(from data: Data) -> UIImage? {
+  fileprivate nonisolated static func downsampledImage(
+    from data: Data,
+    maximumPixelSize: Int
+  ) -> UIImage? {
     guard
       let source = CGImageSourceCreateWithData(
         data as CFData,
@@ -609,7 +703,7 @@ public final class MoreAppsImageLoader {
     let options: [CFString: Any] = [
       kCGImageSourceCreateThumbnailFromImageAlways: true,
       kCGImageSourceCreateThumbnailWithTransform: true,
-      kCGImageSourceThumbnailMaxPixelSize: moreAppsMaximumDecodedPixelSize,
+      kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize,
       kCGImageSourceShouldCacheImmediately: true,
     ]
     guard
