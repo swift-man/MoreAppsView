@@ -208,7 +208,11 @@ struct MoreAppsFeature: Reducer {
           return .none
         }
 
-        guard state.selectionBehavior == .platformPresentation else {
+        let platform = environment.platform
+        guard
+          state.selectionBehavior == .platformPresentation,
+          platform == .iOS
+        else {
           state.openingAppIDs.insert(appID)
           return directOpenEffect(
             dataSessionID: dataSessionID,
@@ -216,12 +220,6 @@ struct MoreAppsFeature: Reducer {
             deepLinkURL: deepLinkURL,
             appStoreURL: appStoreURL
           )
-        }
-
-        let platform = environment.platform
-        guard platform == .iOS || appStoreURL != nil else {
-          enqueue(.failedToOpen(appID: appID), in: &state)
-          return .none
         }
 
         state.presentingAppID = appID
@@ -240,7 +238,7 @@ struct MoreAppsFeature: Reducer {
         }
 
         return .run { send in
-          if platform == .iOS, let deepLinkURL {
+          if let deepLinkURL {
             let didOpenDeepLink = await openURL(deepLinkURL)
             guard !Task.isCancelled else { return }
             if didOpenDeepLink {
@@ -290,16 +288,12 @@ struct MoreAppsFeature: Reducer {
         }
 
         state.presentingAppID = nil
-        let platform = environment.platform
         switch outcome {
         case .dismissed:
           return .none
 
         case .failed:
-          guard platform == .iOS else {
-            enqueue(.failedToOpen(appID: appID), in: &state)
-            return .none
-          }
+          break
 
         case .appStoreRequested:
           break
@@ -314,18 +308,11 @@ struct MoreAppsFeature: Reducer {
           enqueue(.failedToOpen(appID: appID), in: &state)
           return .none
         }
-        let deepLinkURL =
-          platform == .tvOS && outcome == .appStoreRequested
-          ? MoreAppsURLPolicy.allowedDeepLink(
-            destination.deepLinkURL,
-            allowedCustomSchemes: state.allowedCustomDeepLinkSchemes
-          ) : nil
-
         state.openingAppIDs.insert(appID)
         return directOpenEffect(
           dataSessionID: dataSessionID,
           appID: appID,
-          deepLinkURL: deepLinkURL,
+          deepLinkURL: nil,
           appStoreURL: appStoreURL
         )
 

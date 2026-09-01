@@ -1,18 +1,18 @@
 # Changelog
 
-## [0.2.1] - 2026-08-31
+## [0.2.1] - 2026-09-01
 
 ### Added
 
-- Let tvOS users open an installed promoted app from its preview, with automatic fallback
+- Let tvOS selections immediately open an installed promoted app, with automatic fallback
   to the system App Store when the app cannot be opened.
 
 ### Changed
 
-- Present selected tvOS apps in a focus-aware full-screen preview and place initial focus
-  on the destination action.
-- Clarify the destination action and VoiceOver guidance in English and Korean, and document
-  that tvOS hands App Store URLs to the system rather than embedding a product page.
+- Bypass platform presentation on tvOS so selecting a card never shows an intermediate
+  popup or package-owned preview.
+- Keep card VoiceOver guidance aligned with the immediate deep-link-first, App Store
+  fallback behavior.
 
 ## [0.2.0] - 2026-08-23
 

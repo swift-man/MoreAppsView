@@ -64,8 +64,8 @@ public final class MoreAppsView: UIView {
   /// Creates a More Apps view with the package's platform presenter.
   ///
   /// Use this initializer with ``MoreAppsSelectionBehavior/platformPresentation``
-  /// to present an App Store overlay on iOS or a full-screen app preview on
-  /// tvOS.
+  /// to present an App Store overlay on iOS. tvOS always opens its validated
+  /// app or App Store destination immediately and does not present package UI.
   /// The presenter keeps only a weak reference to the supplied view controller.
   ///
   /// - Parameters:
@@ -80,8 +80,7 @@ public final class MoreAppsView: UIView {
       configuration: configuration,
       opener: DefaultMoreAppsOpener.shared,
       presenter: DefaultMoreAppsPresenter(
-        presentingViewController: presentingViewController,
-        imageLoader: imageLoader
+        presentingViewController: presentingViewController
       ),
       imageLoader: imageLoader
     )
@@ -113,7 +112,8 @@ public final class MoreAppsView: UIView {
   ///   - opener: The object used for deep links and App Store URLs.
   ///   - presenter: An optional platform presentation implementation. In
   ///     platform-presentation mode, iOS falls back to `opener` when it is
-  ///     absent or fails; tvOS reports the failure without a URL handoff.
+  ///     absent or fails. tvOS bypasses this collaborator and opens its
+  ///     destination immediately.
   ///   - imageLoader: The loader used for remote app icons.
   public init(
     configuration: MoreAppsConfiguration,

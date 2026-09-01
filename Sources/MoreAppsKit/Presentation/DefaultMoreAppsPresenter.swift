@@ -12,12 +12,13 @@ import Foundation
 #endif
 import UIKit
 
-/// Presents the system App Store overlay on iOS and a full-screen app preview
-/// on tvOS.
+/// Presents the system App Store overlay on iOS.
+///
+/// tvOS selections bypass presentation and use the URL-opening dependency
+/// directly, so this presenter does not display UI on tvOS.
 @MainActor
 public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
   private weak var presentingViewController: UIViewController?
-  private let imageLoader: MoreAppsImageLoader
   private var pendingPresentationID: UUID?
   private var pendingContinuation:
     CheckedContinuation<
@@ -29,109 +30,101 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
     private var activeOverlay: SKOverlay?
     private weak var activeWindowScene: UIWindowScene?
     private var overlayCancellationState = MoreAppsOverlayCancellationState()
-  #elseif os(tvOS)
-    private var activeDetailViewController: MoreAppDetailViewController?
   #endif
-
-  /// Creates a presenter hosted by a view controller with the shared image
-  /// loader.
-  ///
-  /// The presenter keeps a weak reference to the host. Keep both objects alive
-  /// for as long as a presentation may be active.
-  ///
-  /// - Parameter presentingViewController: The view controller whose window and
-  ///   modal presentation context should be used.
-  public convenience init(
-    presentingViewController: UIViewController
-  ) {
-    self.init(
-      presentingViewController: presentingViewController,
-      imageLoader: .shared
-    )
-  }
 
   /// Creates a presenter hosted by a view controller.
   ///
   /// The presenter keeps a weak reference to the host. Keep both objects alive
   /// for as long as a presentation may be active.
   ///
+  /// - Parameter presentingViewController: The view controller whose window and
+  ///   modal presentation context should be used.
+  public init(
+    presentingViewController: UIViewController
+  ) {
+    self.presentingViewController = presentingViewController
+    super.init()
+  }
+
+  /// Creates a presenter hosted by a view controller while accepting a legacy
+  /// image-loader argument.
+  ///
+  /// tvOS no longer presents package-owned artwork. This initializer remains
+  /// available for source compatibility and delegates to
+  /// ``init(presentingViewController:)``.
+  ///
   /// - Parameters:
   ///   - presentingViewController: The view controller whose window and modal
   ///     presentation context should be used.
-  ///   - imageLoader: The loader used for artwork in the tvOS full-screen
-  ///     preview.
-  public init(
+  ///   - imageLoader: An unused legacy image-loader argument.
+  @available(
+    *,
+    deprecated,
+    message: "Use init(presentingViewController:) instead."
+  )
+  public convenience init(
     presentingViewController: UIViewController,
     imageLoader: MoreAppsImageLoader
   ) {
-    self.presentingViewController = presentingViewController
-    self.imageLoader = imageLoader
-    super.init()
+    _ = imageLoader
+    self.init(presentingViewController: presentingViewController)
   }
 
   /// Presents the platform-appropriate App Store experience.
   ///
   /// - Parameter request: The app and destination to present.
-  /// - Returns: The outcome reported by StoreKit or the tvOS app preview.
+  /// - Returns: The outcome reported by StoreKit, or `failed` on tvOS where
+  ///   package-owned presentation is intentionally disabled.
   public func present(
     _ request: MoreAppsPresentationRequest
   ) async -> MoreAppsPresentationOutcome {
     guard !Task.isCancelled else { return .dismissed }
 
-    #if os(iOS)
+    #if os(tvOS)
+      _ = request
+      return .failed
+    #else
       if activeOverlay != nil {
         return overlayCancellationState.overlappingPresentationOutcome
       }
-    #endif
 
-    guard
-      let host = presentingViewController,
-      host.presentedViewController == nil,
-      let scene = host.viewIfLoaded?.window?.windowScene,
-      scene.activationState == .foregroundActive
-    else {
-      return .failed
-    }
+      guard
+        let host = presentingViewController,
+        host.presentedViewController == nil,
+        let scene = host.viewIfLoaded?.window?.windowScene,
+        scene.activationState == .foregroundActive
+      else {
+        return .failed
+      }
 
-    #if os(iOS)
       guard
         let appStoreIdentifier = request.appStoreIdentifier,
         !appStoreIdentifier.isEmpty
       else {
         return .failed
       }
-    #elseif os(tvOS)
-      guard activeDetailViewController == nil else { return .failed }
-    #endif
 
-    let presentationID = UUID()
-    return await withTaskCancellationHandler {
-      await withCheckedContinuation { continuation in
-        pendingPresentationID = presentationID
-        pendingContinuation = continuation
+      let presentationID = UUID()
+      return await withTaskCancellationHandler {
+        await withCheckedContinuation { continuation in
+          pendingPresentationID = presentationID
+          pendingContinuation = continuation
 
-        #if os(iOS)
           presentOverlay(
             appStoreIdentifier: appStoreIdentifier,
             in: scene
           )
-        #elseif os(tvOS)
-          presentDetail(
-            for: request.app,
-            from: host,
-            presentationID: presentationID
-          )
-        #endif
 
-        if Task.isCancelled {
-          cancelPresentation(id: presentationID)
+          if Task.isCancelled {
+            cancelPresentation(id: presentationID)
+          }
+        }
+      } onCancel: { [weak self] in
+        Task { @MainActor in
+          self?.cancelPresentation(id: presentationID)
         }
       }
-    } onCancel: { [weak self] in
-      Task { @MainActor in
-        self?.cancelPresentation(id: presentationID)
-      }
-    }
+    #endif
   }
 
   private func finishPendingPresentation(
@@ -158,15 +151,6 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
       }
 
       SKOverlay.dismiss(in: activeWindowScene)
-    #elseif os(tvOS)
-      let detailViewController = activeDetailViewController
-      detailViewController?.dismiss(animated: true) { [weak self] in
-        self?.finishPendingPresentation(id: id, outcome: .dismissed)
-      }
-
-      if detailViewController == nil {
-        finishPendingPresentation(id: id, outcome: .dismissed)
-      }
     #endif
   }
 
@@ -221,28 +205,6 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
           outcome: resolvedOutcome
         )
       }
-    }
-  #elseif os(tvOS)
-    private func presentDetail(
-      for app: MoreApp,
-      from host: UIViewController,
-      presentationID: UUID
-    ) {
-      let detailViewController = MoreAppDetailViewController(
-        app: app,
-        imageLoader: imageLoader
-      ) { [weak self] outcome in
-        Task { @MainActor in
-          guard let self else { return }
-          self.activeDetailViewController = nil
-          self.finishPendingPresentation(
-            id: presentationID,
-            outcome: outcome
-          )
-        }
-      }
-      activeDetailViewController = detailViewController
-      host.present(detailViewController, animated: true)
     }
   #endif
 }

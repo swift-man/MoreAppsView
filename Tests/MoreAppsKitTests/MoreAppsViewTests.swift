@@ -143,8 +143,8 @@ struct MoreAppsViewTests {
       let hintKey: String.LocalizationValue =
         "more_apps_open_or_view_hint"
     #else
-      let actionKey: String.LocalizationValue = "more_apps_view_action"
-      let hintKey: String.LocalizationValue = "more_apps_view_hint"
+      let actionKey: String.LocalizationValue = "more_apps_open_action"
+      let hintKey: String.LocalizationValue = "more_apps_open_hint"
     #endif
     let expectedAction = String(localized: actionKey, bundle: .module)
     let expectedHint = String(localized: hintKey, bundle: .module)

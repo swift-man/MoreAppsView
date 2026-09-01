@@ -11,8 +11,8 @@ import UIKit
 
 @MainActor
 final class MoreAppsExampleViewController: UIViewController {
-  // Selecting a card presents a full-screen preview. Its explicit action opens
-  // an installed app first, then falls back to the system App Store app.
+  // Selecting a card opens an installed app immediately, then falls back to
+  // the system App Store app without presenting intermediate package UI.
   private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       title: "More Apps on Apple TV",
@@ -24,9 +24,8 @@ final class MoreAppsExampleViewController: UIViewController {
         trailing: 64
       ),
       allowedCustomDeepLinkSchemes: ["andromeda17k"],
-      selectionBehavior: .platformPresentation
-    ),
-    presentingViewController: self
+      selectionBehavior: .directOpen
+    )
   )
 
   override func viewDidLoad() {

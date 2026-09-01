@@ -174,9 +174,8 @@ final class TVAppsViewController: UIViewController {
       title: "More Apps on Apple TV",
       cardSpacing: 28,
       allowedCustomDeepLinkSchemes: ["andromeda17k"],
-      selectionBehavior: .platformPresentation
-    ),
-    presentingViewController: self
+      selectionBehavior: .directOpen
+    )
   )
 
   override func viewDidLoad() {
@@ -186,17 +185,11 @@ final class TVAppsViewController: UIViewController {
 }
 ```
 
-Selecting a card presents MoreAppsKit's focus-aware, full-screen app preview. It
-contains the app icon, name, subtitle, an explicit **Open App or View on the App
-Store** action, and a close action. The explicit action first tries the validated
-deep link. If the system accepts it, the installed app opens; otherwise the
-validated App Store URL is handed to the system App Store app. Selecting a card
-alone never leaves the host app, and Remote Back or Close dismisses the preview.
-
-tvOS does not provide `SKOverlay` or an in-app App Store product controller, so
-an App Store product page cannot be embedded inside the host app. The full-screen
-preview belongs to MoreAppsKit; the final App Store URL handoff leaves it for the
-system App Store experience.
+Selecting a card immediately tries the validated deep link. If the system accepts
+it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
+URL to the system App Store app. No intermediate popup or package-owned preview is
+presented. tvOS does not provide `SKOverlay` or an in-app App Store product
+controller, so the final App Store experience always belongs to the system.
 
 See [Samples/tvOS/MoreAppsExampleViewController.swift](Samples/tvOS/MoreAppsExampleViewController.swift)
 for a complete example.
@@ -253,9 +246,8 @@ when the filtered result is empty.
 `MoreAppsConfiguration.selectionBehavior` supports two policies:
 
 - `.directOpen` preserves the original behavior and remains the default.
-- `.platformPresentation` uses an iOS StoreKit overlay or a tvOS full-screen app
-  preview. Supply a presenting view controller or a custom
-  `MoreAppsPresenting` implementation when selecting this policy.
+- `.platformPresentation` uses an iOS StoreKit overlay. On tvOS it intentionally
+  matches `.directOpen`, so no presenter or presenting view controller is needed.
 
 In direct-open mode, the TCA reducer:
 
@@ -276,12 +268,9 @@ are rejected. Add only the target apps' trusted scheme names to
 
 In platform-presentation mode, iOS tries the same validated deep link first. A
 failed or missing deep link presents `SKOverlay` using the numeric identifier in
-the validated App Store URL. tvOS does not open a destination on card selection;
-it waits for the explicit action in the full-screen preview, then tries the
-validated deep link before falling back to the validated App Store URL. A
-StoreKit or presentation failure on iOS safely falls back to the App Store URL.
-On tvOS, dismissing the preview or failing to present it performs no URL handoff;
-a presentation failure emits `failedToOpen` without opening the App Store.
+the validated App Store URL, and a presentation failure safely falls back to the
+App Store URL. tvOS bypasses the presentation dependency and follows the direct
+deep-link-first, App-Store-fallback flow immediately.
 
 A custom `MoreAppsPresenting` implementation keeps `present(_:)` suspended until
 its UI lifecycle ends. It dismisses that UI and returns `.dismissed` when its task
@@ -324,9 +313,9 @@ MoreAppsSwiftUIView(
 )
 ```
 
-The wrapper accepts an optional `MoreAppsPresenting` implementation when a
-SwiftUI host opts into platform presentation. Direct-open behavior requires no
-presenter.
+The wrapper accepts an optional `MoreAppsPresenting` implementation when an iOS
+SwiftUI host opts into platform presentation. tvOS and direct-open behavior do
+not require a presenter.
 
 ## Public API overview
 
@@ -334,9 +323,8 @@ presenter.
 - `MoreAppsFilter`: explicit pure filtering for custom catalog pipelines and tests.
 - `MoreAppsProviding`, `StaticMoreAppsProvider`, `RemoteJSONMoreAppsProvider`: catalog sources.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
-- `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable StoreKit and tvOS
-  full-screen preview presentation without expanding the URL opener's
-  responsibility.
+- `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable iOS StoreKit
+  presentation without expanding the URL opener's responsibility.
 - `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in platform UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
@@ -354,7 +342,7 @@ cells, event envelopes, and caches remain implementation details.
 | `Models` | Codable metadata, platform destinations, events, pure filtering |
 | `Data` | Provider protocol/client, static provider, Alamofire remote provider |
 | `Navigation` | URL-opening protocol, live `UIApplication` implementation, dependency key |
-| `Presentation` | StoreKit overlay, tvOS full-screen preview, presenter dependency key |
+| `Presentation` | iOS StoreKit overlay and presenter dependency key |
 | `Feature` | TCA state, actions, effects, host environment dependency |
 | `ImageLoading` | Alamofire image bytes, MIME checks, in-flight sharing, memory caches |
 | `UI` | Configuration, reusable card cell, diffable UIKit view, SwiftUI wrapper |
