@@ -14,12 +14,16 @@ enum TestFixtures {
   static let iOSStoreURL = URL(string: "https://apps.apple.com/app/id100")!
   static let tvOSStoreURL = URL(string: "https://apps.apple.com/app/id200")!
   static let deepLinkURL = URL(string: "sample://home")!
+  static let backgroundImageURL = URL(
+    string: "https://example.com/background.png"
+  )!
 
   static func app(
     id: String = "sample",
     bundleIdentifier: String = "com.example.sample",
     platforms: [MoreAppsPlatform] = [.iOS],
     deepLinkURL: URL? = TestFixtures.deepLinkURL,
+    backgroundImageURL: URL? = nil,
     appStoreURL: URL? = nil,
     sortOrder: Int = 0
   ) -> MoreApp {
@@ -33,7 +37,8 @@ enum TestFixtures {
           platform: platform,
           appStoreURL: appStoreURL
             ?? (platform == .iOS ? iOSStoreURL : tvOSStoreURL),
-          deepLinkURL: deepLinkURL
+          deepLinkURL: deepLinkURL,
+          backgroundImageURL: backgroundImageURL
         )
       },
       sortOrder: sortOrder

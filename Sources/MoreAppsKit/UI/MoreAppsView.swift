@@ -28,6 +28,20 @@ public final class MoreAppsView: UIView {
     didSet { scheduleEventDeliveryIfNeeded() }
   }
 
+  /// A host-owned full-screen view that displays the focused app's artwork.
+  ///
+  /// Place the background view behind the host interface before assigning it.
+  /// MoreAppsView keeps only a weak reference and synchronizes tvOS Focus Engine
+  /// changes with the current destination's
+  /// ``MoreAppDestination/backgroundImageURL``.
+  public weak var focusedBackgroundView: MoreAppsFocusedBackgroundView? {
+    didSet {
+      guard oldValue !== focusedBackgroundView else { return }
+      oldValue?.display(appID: nil, imageURL: nil, animated: false)
+      renderFocusedBackground(appID: store.focusedAppID)
+    }
+  }
+
   private var configuration: MoreAppsConfiguration
   private let imageLoader: MoreAppsImageLoader
   private let flowLayout: UICollectionViewFlowLayout
@@ -353,16 +367,23 @@ public final class MoreAppsView: UIView {
   private func bindStore() {
     observe { [weak self] in
       guard let self else { return }
-      self.render(apps: self.store.apps)
+      self.render(
+        apps: self.store.apps,
+        focusedAppID: self.store.focusedAppID
+      )
     }
   }
 
-  private func render(apps: [MoreApp]) {
+  private func render(
+    apps: [MoreApp],
+    focusedAppID: MoreApp.ID?
+  ) {
     isHidden = configuration.hidesWhenEmpty && apps.isEmpty
 
     if apps != currentOrderedApps {
       applySnapshot(apps: apps)
     }
+    renderFocusedBackground(appID: focusedAppID)
 
     // Keep this observation active so reducer-enqueued events schedule delivery.
     _ = store.pendingEvents
@@ -400,6 +421,27 @@ public final class MoreAppsView: UIView {
     snapshot.reconfigureItems(snapshot.itemIdentifiers)
     dataSource.apply(snapshot, animatingDifferences: false)
   }
+
+  private func renderFocusedBackground(appID: MoreApp.ID?) {
+    let imageURL = appID.flatMap { appID in
+      currentApps[appID]?
+        .destination(for: .current)?
+        .backgroundImageURL
+    }
+    focusedBackgroundView?.display(
+      appID: appID,
+      imageURL: imageURL
+    )
+  }
+
+  #if os(tvOS)
+    func updateFocusedApp(at indexPath: IndexPath?) {
+      let appID: MoreApp.ID? = indexPath.flatMap {
+        dataSource.itemIdentifier(for: $0)
+      }
+      store.send(.focusChanged(appID: appID))
+    }
+  #endif
 
   private func scheduleEventDeliveryIfNeeded() {
     guard eventDeliveryTask == nil,
@@ -517,6 +559,17 @@ public final class MoreAppsView: UIView {
 }
 
 extension MoreAppsView: UICollectionViewDelegate {
+  #if os(tvOS)
+    /// Synchronizes Focus Engine changes with optional background artwork.
+    public func collectionView(
+      _ collectionView: UICollectionView,
+      didUpdateFocusIn context: UICollectionViewFocusUpdateContext,
+      with coordinator: UIFocusAnimationCoordinator
+    ) {
+      updateFocusedApp(at: context.nextFocusedIndexPath)
+    }
+  #endif
+
   /// Handles selection of a promoted app card.
   public func collectionView(
     _ collectionView: UICollectionView,

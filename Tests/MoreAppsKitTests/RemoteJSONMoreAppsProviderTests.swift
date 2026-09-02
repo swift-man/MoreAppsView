@@ -32,6 +32,36 @@ struct RemoteJSONMoreAppsProviderTests {
     #expect(apps.count == 1)
     #expect(apps.first?.id == "reaction-speed")
     #expect(apps.first?.destinations.first?.platform == .iOS)
+    #expect(
+      apps.first?.destinations.first?.backgroundImageURL
+        == TestFixtures.backgroundImageURL
+    )
+  }
+
+  @Test
+  func testLegacyDestinationWithoutBackgroundImageStillDecodes() throws {
+    let legacyJSON = Data(
+      """
+      [
+        {
+          "id": "legacy",
+          "bundleIdentifier": "com.example.legacy",
+          "name": "Legacy",
+          "destinations": [
+            {
+              "platform": "iOS",
+              "appStoreURL": "https://apps.apple.com/app/id1234567890"
+            }
+          ],
+          "sortOrder": 0
+        }
+      ]
+      """.utf8
+    )
+
+    let apps = try JSONDecoder().decode([MoreApp].self, from: legacyJSON)
+
+    #expect(apps.first?.destinations.first?.backgroundImageURL == nil)
   }
 
   @Test
@@ -276,7 +306,8 @@ struct RemoteJSONMoreAppsProviderTests {
           {
             "platform": "iOS",
             "appStoreURL": "https://apps.apple.com/app/id1234567890",
-            "deepLinkURL": "reactionspeed://home"
+            "deepLinkURL": "reactionspeed://home",
+            "backgroundImageURL": "https://example.com/background.png"
           }
         ]
       }
