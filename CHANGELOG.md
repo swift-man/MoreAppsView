@@ -23,8 +23,11 @@
   when a successful catalog update starts a new data session.
 - Clear host-owned focus artwork when `MoreAppsView` is released, while ownership
   tokens prevent a stale view cleanup from clearing artwork after host reuse.
+- Retry identical focus artwork when ownership moves to a new `MoreAppsView`, and
+  serialize URL handoffs so rapid selections cannot launch competing destinations.
 - Provide an optional artwork failure callback for host diagnostics, normalize
-  non-finite dimming input, and replace scheduler polling with async test signals.
+  non-finite dimming input, and replace scheduler polling with bounded async test
+  signals.
 
 ## [0.2.0] - 2026-08-23
 

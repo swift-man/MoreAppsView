@@ -223,12 +223,17 @@ log or transmit those errors. Reduce Motion disables the crossfade. The sample
 catalog uses Andromeda 17K's first App Store tvOS
 screenshot; for production catalogs, hosting approved artwork on a URL you control
 avoids depending on a storefront asset URL remaining stable.
+Each background-view instance has exclusive ownership: assign it to only one live
+`MoreAppsView` at a time. A new owner retries its first request even when the prior
+owner used the same app, artwork URL, and catalog revision.
 
 Selecting a card immediately tries the validated deep link. If the system accepts
 it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
 URL to the system App Store app. No intermediate popup or package-owned preview is
-presented. tvOS does not provide `SKOverlay` or an in-app App Store product
-controller, so the final App Store experience always belongs to the system.
+presented. Additional selections are ignored until that URL handoff completes, so
+multiple external destinations cannot race. tvOS does not provide `SKOverlay` or an
+in-app App Store product controller, so the final App Store experience always belongs
+to the system.
 
 See [Samples/tvOS/MoreAppsExampleViewController.swift](Samples/tvOS/MoreAppsExampleViewController.swift)
 for a complete example.

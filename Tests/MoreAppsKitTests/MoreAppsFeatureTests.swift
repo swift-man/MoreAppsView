@@ -1347,9 +1347,13 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testUnknownImpressionAndDuplicateSelectionAreIgnored() async {
+  func testUnknownImpressionAndSelectionsDuringOpenAreIgnored() async {
+    let otherApp = TestFixtures.app(
+      id: "other",
+      bundleIdentifier: "com.example.other"
+    )
     var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
-    state.apps = [TestFixtures.app()]
+    state.apps = [TestFixtures.app(), otherApp]
     state.openingAppIDs = ["sample"]
 
     let store = TestStore(initialState: state) {
@@ -1358,6 +1362,7 @@ struct MoreAppsFeatureTests {
 
     await store.send(.itemBecameVisible(appID: "missing"))
     await store.send(.selected(appID: "sample"))
+    await store.send(.selected(appID: otherApp.id))
     await store.send(.selected(appID: "missing"))
   }
 

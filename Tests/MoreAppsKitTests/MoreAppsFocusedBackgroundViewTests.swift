@@ -263,6 +263,46 @@ struct MoreAppsFocusedBackgroundViewTests {
   }
 
   @Test
+  func testNewOwnerRetriesTheSameRequestAfterPreviousOwnerFailure() async {
+    let image = UIImage(systemName: "sparkles")!
+    let firstOwnerID = UUID()
+    let secondOwnerID = UUID()
+    var requestCount = 0
+    let view = makeView { _, _ in
+      requestCount += 1
+      if requestCount == 1 {
+        throw MoreAppsImageLoadingError.decodingFailed
+      }
+      return image
+    }
+
+    view.attach(ownerID: firstOwnerID)
+    view.display(
+      appID: "andromeda",
+      imageURL: TestFixtures.backgroundImageURL,
+      requestRevision: 1,
+      ownerID: firstOwnerID,
+      animated: false
+    )
+    await waitForImageRequestToFinish(in: view)
+    #expect(view.displayedImage == nil)
+
+    view.attach(ownerID: secondOwnerID)
+    view.display(
+      appID: "andromeda",
+      imageURL: TestFixtures.backgroundImageURL,
+      requestRevision: 1,
+      ownerID: secondOwnerID,
+      animated: false
+    )
+    await waitForImageRequestToFinish(in: view)
+
+    #expect(requestCount == 2)
+    #expect(view.displayedAppID == "andromeda")
+    #expect(view.displayedImage === image)
+  }
+
+  @Test
   func testDimmingAlphaIsClamped() {
     let view = makeView { _, _ in UIImage() }
 

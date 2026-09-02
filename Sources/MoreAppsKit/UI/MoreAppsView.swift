@@ -34,6 +34,8 @@ public final class MoreAppsView: UIView {
   /// MoreAppsView keeps only a weak reference and synchronizes tvOS Focus Engine
   /// changes with the current destination's
   /// ``MoreAppDestination/backgroundImageURL``.
+  /// Do not share one background view between multiple live MoreAppsView
+  /// instances; ownership is exclusive and the most recent assignment wins.
   public weak var focusedBackgroundView: MoreAppsFocusedBackgroundView? {
     didSet {
       guard oldValue !== focusedBackgroundView else { return }

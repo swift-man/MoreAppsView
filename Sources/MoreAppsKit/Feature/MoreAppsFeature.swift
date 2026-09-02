@@ -191,7 +191,7 @@ struct MoreAppsFeature: Reducer {
         return .none
 
       case .selected(let appID):
-        guard !state.openingAppIDs.contains(appID),
+        guard state.openingAppIDs.isEmpty,
           state.presentingAppID == nil,
           let app = state.apps.first(where: { $0.id == appID }),
           let destination = app.destination(for: environment.platform)

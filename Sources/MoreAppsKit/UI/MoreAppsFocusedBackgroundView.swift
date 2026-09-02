@@ -29,6 +29,7 @@ private func moreAppsNormalizedTransitionDuration(
 /// focused app's current-platform destination supplies a
 /// ``MoreAppDestination/backgroundImageURL``. Stale work is cancelled when
 /// focus changes, and transitions honor Reduce Motion.
+/// Assign each instance to at most one live ``MoreAppsView`` at a time.
 @MainActor
 public final class MoreAppsFocusedBackgroundView: UIView {
   typealias ImageProvider = @MainActor (URL, Int) async throws -> UIImage
@@ -50,6 +51,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
   private var requestedAppID: MoreApp.ID?
   private var requestedImageURL: URL?
   private var requestedRevision = 0
+  private var requestedOwnerID: UUID?
   private var renderedAppID: MoreApp.ID?
   private var requestGeneration: UInt = 0
   private var ownerID: UUID?
@@ -183,6 +185,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
       requestedAppID != appID
         || requestedImageURL != imageURL
         || requestedRevision != requestRevision
+        || requestedOwnerID != ownerID
     else {
       return
     }
@@ -194,6 +197,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     requestedAppID = appID
     requestedImageURL = imageURL
     requestedRevision = requestRevision
+    requestedOwnerID = ownerID
 
     guard let appID, let imageURL else {
       setImage(nil, appID: nil, animated: animated)
@@ -209,7 +213,9 @@ public final class MoreAppsFocusedBackgroundView: UIView {
         guard let self,
           self.requestGeneration == generation,
           self.requestedAppID == appID,
-          self.requestedImageURL == imageURL
+          self.requestedImageURL == imageURL,
+          self.requestedOwnerID == ownerID,
+          self.ownerID == ownerID
         else {
           return
         }
@@ -220,7 +226,9 @@ public final class MoreAppsFocusedBackgroundView: UIView {
           self.requestGeneration == generation,
           self.requestedAppID == appID,
           self.requestedImageURL == imageURL,
-          self.requestedRevision == requestRevision
+          self.requestedRevision == requestRevision,
+          self.requestedOwnerID == ownerID,
+          self.ownerID == ownerID
         else {
           return
         }
@@ -231,7 +239,9 @@ public final class MoreAppsFocusedBackgroundView: UIView {
           self.requestGeneration == generation,
           self.requestedAppID == appID,
           self.requestedImageURL == imageURL,
-          self.requestedRevision == requestRevision
+          self.requestedRevision == requestRevision,
+          self.requestedOwnerID == ownerID,
+          self.ownerID == ownerID
         else {
           return
         }
