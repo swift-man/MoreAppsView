@@ -299,6 +299,7 @@ struct MoreAppsImageLoaderTests {
     let requestCounter = LockedCounter()
     let decodedSizes = LockedValues<Int>()
     let waiterCounts = LockedValues<Int>()
+    let twoWaiters = AsyncTestSignal()
     ImageMockURLProtocol.handler = { request in
       requestCounter.increment()
       responseGate.wait()
@@ -314,6 +315,9 @@ struct MoreAppsImageLoaderTests {
       sessionConfiguration: configuration,
       onDataWaiterAdded: { _, waiterCount in
         waiterCounts.append(waiterCount)
+        if waiterCount == 2 {
+          twoWaiters.signal()
+        }
       },
       sizedImageDecoder: { data, maximumPixelSize in
         decodedSizes.append(maximumPixelSize)
@@ -334,11 +338,7 @@ struct MoreAppsImageLoaderTests {
         maximumPixelSize: 1_920
       )
     }
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while !waiterCounts.values.contains(2), clock.now < deadline {
-      await Task.yield()
-    }
+    await twoWaiters.wait()
     #expect(waiterCounts.values.contains(2))
     responseGate.release()
     _ = try await (cardImage.value, backgroundImage.value)
@@ -439,6 +439,57 @@ struct MoreAppsImageLoaderTests {
   }
 
   @Test
+  func testOversizedDecodedBitmapBypassesTheImageCache() async throws {
+    defer { ImageMockURLProtocol.handler = nil }
+    let requestCounter = LockedCounter()
+    let decodeCounter = LockedCounter()
+    ImageMockURLProtocol.handler = { request in
+      requestCounter.increment()
+      return (
+        Self.response(for: request, contentType: "image/png"),
+        Self.onePixelPNG
+      )
+    }
+
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let context = try #require(
+      CGContext(
+        data: nil,
+        width: 2_900,
+        height: 2_900,
+        bitsPerComponent: 8,
+        bytesPerRow: 2_900 * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+      )
+    )
+    let oversizedCGImage = try #require(context.makeImage())
+    let oversizedImage = UIImage(cgImage: oversizedCGImage)
+    #expect(
+      MoreAppsImageLoader.decodedCost(
+        bytesPerRow: oversizedCGImage.bytesPerRow,
+        height: oversizedCGImage.height
+      ) > 32 * 1_024 * 1_024
+    )
+
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [ImageMockURLProtocol.self]
+    let loader = MoreAppsImageLoader(
+      sessionConfiguration: configuration,
+      sizedImageDecoder: { _, _ in
+        decodeCounter.increment()
+        return oversizedImage
+      }
+    )
+
+    _ = try await loader.image(for: Self.imageURL)
+    _ = try await loader.image(for: Self.imageURL)
+
+    #expect(requestCounter.count == 2)
+    #expect(decodeCounter.count == 2)
+  }
+
+  @Test
   func testCancellingOnePixelSizeKeepsSharedTransportForAnother() async throws {
     let responseGate = ImageResponseGate()
     defer {
@@ -449,6 +500,7 @@ struct MoreAppsImageLoaderTests {
     let requestCounter = LockedCounter()
     let stopCounter = LockedCounter()
     let waiterCounts = LockedValues<Int>()
+    let twoWaiters = AsyncTestSignal()
     ImageMockURLProtocol.handler = { request in
       requestCounter.increment()
       responseGate.wait()
@@ -465,6 +517,9 @@ struct MoreAppsImageLoaderTests {
       sessionConfiguration: configuration,
       onDataWaiterAdded: { _, waiterCount in
         waiterCounts.append(waiterCount)
+        if waiterCount == 2 {
+          twoWaiters.signal()
+        }
       },
       sizedImageDecoder: { data, _ in UIImage(data: data, scale: 1) }
     )
@@ -481,7 +536,8 @@ struct MoreAppsImageLoaderTests {
         maximumPixelSize: 1_920
       )
     }
-    await waitForTwoDataWaiters(waiterCounts)
+    await twoWaiters.wait()
+    #expect(waiterCounts.values.contains(2))
 
     cardImage.cancel()
     await expectCancellation(of: cardImage)
@@ -502,6 +558,7 @@ struct MoreAppsImageLoaderTests {
     }
     let requestCounter = LockedCounter()
     let waiterCounts = LockedValues<Int>()
+    let twoWaiters = AsyncTestSignal()
     ImageMockURLProtocol.handler = { request in
       requestCounter.increment()
       responseGate.wait()
@@ -517,6 +574,9 @@ struct MoreAppsImageLoaderTests {
       sessionConfiguration: configuration,
       onDataWaiterAdded: { _, waiterCount in
         waiterCounts.append(waiterCount)
+        if waiterCount == 2 {
+          twoWaiters.signal()
+        }
       },
       sizedImageDecoder: { data, _ in UIImage(data: data, scale: 1) }
     )
@@ -533,7 +593,8 @@ struct MoreAppsImageLoaderTests {
         maximumPixelSize: 1_920
       )
     }
-    await waitForTwoDataWaiters(waiterCounts)
+    await twoWaiters.wait()
+    #expect(waiterCounts.values.contains(2))
 
     await loader.removeAllCachedImages()
     responseGate.release()
@@ -620,11 +681,7 @@ struct MoreAppsImageLoaderTests {
     task.cancel()
     await expectCancellation(of: task)
 
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while stops.count == 0, clock.now < deadline {
-      await Task.yield()
-    }
+    await stops.waitUntilIncremented()
     #expect(stops.count == 1)
   }
 
@@ -709,23 +766,8 @@ struct MoreAppsImageLoaderTests {
     }
   }
 
-  private func waitForTwoDataWaiters(
-    _ waiterCounts: LockedValues<Int>
-  ) async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while !waiterCounts.values.contains(2), clock.now < deadline {
-      await Task.yield()
-    }
-    #expect(waiterCounts.values.contains(2))
-  }
-
   private func waitUntilIncremented(_ counter: LockedCounter) async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while counter.count == 0, clock.now < deadline {
-      await Task.yield()
-    }
+    await counter.waitUntilIncremented()
     #expect(counter.count > 0)
   }
 
@@ -774,11 +816,11 @@ private final class MainActorSignal {
 
 private actor ImageDecodeGate {
   private var isWaiting = true
-  private var hasStarted = false
+  private let didStart = AsyncTestSignal()
   private var continuations: [CheckedContinuation<Void, Never>] = []
 
   func decode(_ data: Data) async -> UIImage? {
-    hasStarted = true
+    didStart.signal()
     if isWaiting {
       await withCheckedContinuation { continuation in
         continuations.append(continuation)
@@ -788,12 +830,7 @@ private actor ImageDecodeGate {
   }
 
   func waitUntilStarted() async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while !hasStarted, clock.now < deadline {
-      await Task.yield()
-    }
-    #expect(hasStarted)
+    await didStart.wait()
   }
 
   func release() {
@@ -805,6 +842,7 @@ private actor ImageDecodeGate {
 
 private final class LockedCounter {
   private let lock = NSLock()
+  private let didIncrement = AsyncTestSignal()
   private var value = 0
 
   var count: Int {
@@ -816,9 +854,15 @@ private final class LockedCounter {
   @discardableResult
   func increment() -> Int {
     lock.lock()
-    defer { lock.unlock() }
     value += 1
-    return value
+    let updatedValue = value
+    lock.unlock()
+    didIncrement.signal()
+    return updatedValue
+  }
+
+  func waitUntilIncremented() async {
+    await didIncrement.wait()
   }
 }
 

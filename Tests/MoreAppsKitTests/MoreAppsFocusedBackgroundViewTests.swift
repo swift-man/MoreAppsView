@@ -12,7 +12,7 @@ import UIKit
 @testable import MoreAppsKit
 
 @MainActor
-@Suite
+@Suite(.serialized)
 struct MoreAppsFocusedBackgroundViewTests {
   @Test
   func testFocusedArtworkLoadsAtTheConfiguredPixelSize() async {
@@ -28,7 +28,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(view.displayedAppID == "andromeda")
     #expect(view.displayedImage === image)
@@ -46,7 +46,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
     #expect(abs(view.dimmingOpacity - 0.46) < 0.001)
 
     view.dimmingAlpha = 0.7
@@ -74,7 +74,7 @@ struct MoreAppsFocusedBackgroundViewTests {
     }
 
     view.display(appID: "first", imageURL: firstURL, animated: false)
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
     view.display(appID: "second", imageURL: secondURL, animated: false)
     await secondImageGate.waitUntilStarted()
 
@@ -82,7 +82,7 @@ struct MoreAppsFocusedBackgroundViewTests {
     #expect(view.displayedImage === firstImage)
 
     secondImageGate.release()
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(view.displayedAppID == "second")
     #expect(view.displayedImage === secondImage)
@@ -90,38 +90,35 @@ struct MoreAppsFocusedBackgroundViewTests {
 
   @Test
   func testFocusChangeCancelsThePreviousImageTask() async {
-    var didStart = false
     var cancellationCount = 0
+    var failureCount = 0
+    let didStart = AsyncTestSignal()
+    let didCancel = AsyncTestSignal()
     let view = makeView { _, _ in
-      didStart = true
+      didStart.signal()
       do {
         try await Task.sleep(for: .seconds(60))
         return UIImage(systemName: "sparkles")!
       } catch is CancellationError {
         cancellationCount += 1
+        didCancel.signal()
         throw CancellationError()
       }
     }
+    view.onImageLoadingFailure = { _, _ in failureCount += 1 }
 
     view.display(
       appID: "andromeda",
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    let clock = ContinuousClock()
-    let startDeadline = clock.now.advanced(by: .seconds(1))
-    while !didStart, clock.now < startDeadline {
-      await Task.yield()
-    }
-    #expect(didStart)
+    await didStart.wait()
 
     view.display(appID: nil, imageURL: nil, animated: false)
-    let cancellationDeadline = clock.now.advanced(by: .seconds(1))
-    while cancellationCount == 0, clock.now < cancellationDeadline {
-      await Task.yield()
-    }
+    await didCancel.wait()
 
     #expect(cancellationCount == 1)
+    #expect(failureCount == 0)
     #expect(view.displayedImage == nil)
   }
 
@@ -142,7 +139,7 @@ struct MoreAppsFocusedBackgroundViewTests {
     view.display(appID: "first", imageURL: firstURL, animated: false)
     await firstImageGate.waitUntilStarted()
     view.display(appID: "second", imageURL: secondURL, animated: false)
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
     firstImageGate.release()
     await firstImageGate.waitUntilReturned()
 
@@ -173,7 +170,7 @@ struct MoreAppsFocusedBackgroundViewTests {
     await firstImageGate.waitUntilStarted()
     view.display(appID: "middle", imageURL: middleURL, animated: false)
     view.display(appID: "first", imageURL: firstURL, animated: false)
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(view.displayedAppID == "first")
     #expect(view.displayedImage === latestImage)
@@ -189,8 +186,14 @@ struct MoreAppsFocusedBackgroundViewTests {
 
   @Test
   func testLoadFailureLeavesTheBackgroundEmpty() async {
+    var reportedURL: URL?
+    var reportedError: MoreAppsImageLoadingError?
     let view = makeView { _, _ in
       throw MoreAppsImageLoadingError.decodingFailed
+    }
+    view.onImageLoadingFailure = { url, error in
+      reportedURL = url
+      reportedError = error as? MoreAppsImageLoadingError
     }
 
     view.display(
@@ -198,10 +201,12 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(view.displayedAppID == nil)
     #expect(view.displayedImage == nil)
+    #expect(reportedURL == TestFixtures.backgroundImageURL)
+    #expect(reportedError == .decodingFailed)
   }
 
   @Test
@@ -217,9 +222,9 @@ struct MoreAppsFocusedBackgroundViewTests {
     }
 
     view.display(appID: "first", imageURL: firstURL, animated: false)
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
     view.display(appID: "second", imageURL: secondURL, animated: false)
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(view.displayedAppID == nil)
     #expect(view.displayedImage == nil)
@@ -242,7 +247,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
     #expect(view.displayedImage == nil)
 
     view.display(appID: nil, imageURL: nil, animated: false)
@@ -251,7 +256,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(requestCount == 2)
     #expect(view.displayedImage === image)
@@ -266,6 +271,9 @@ struct MoreAppsFocusedBackgroundViewTests {
 
     view.dimmingAlpha = -1
     #expect(view.dimmingAlpha == 0)
+
+    view.dimmingAlpha = .nan
+    #expect(view.dimmingAlpha == 0.46)
   }
 
   @Test
@@ -287,7 +295,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(requestCount == 1)
   }
@@ -312,7 +320,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(requestedPixelSize == 1)
   }
@@ -337,7 +345,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       imageURL: TestFixtures.backgroundImageURL,
       animated: false
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(requestedPixelSize == 4_096)
   }
@@ -361,7 +369,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       appID: "andromeda",
       imageURL: TestFixtures.backgroundImageURL
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(transitionCount == 0)
   }
@@ -385,7 +393,7 @@ struct MoreAppsFocusedBackgroundViewTests {
       appID: "andromeda",
       imageURL: TestFixtures.backgroundImageURL
     )
-    await waitUntilImageRequestFinishes(in: view)
+    await waitForImageRequestToFinish(in: view)
 
     #expect(transitionCount == 1)
   }
@@ -403,40 +411,25 @@ struct MoreAppsFocusedBackgroundViewTests {
     )
   }
 
-  private func waitUntilImageRequestFinishes(
-    in view: MoreAppsFocusedBackgroundView
-  ) async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while view.isLoadingImage, clock.now < deadline {
-      await Task.yield()
-    }
-    #expect(!view.isLoadingImage)
-  }
 }
 
 @MainActor
 private final class BackgroundImageGate {
-  private var hasStarted = false
-  private var hasReturned = false
+  private let didStart = AsyncTestSignal()
+  private let didReturn = AsyncTestSignal()
   private var releaseContinuation: CheckedContinuation<Void, Never>?
 
   func image(afterRelease image: UIImage) async -> UIImage {
-    hasStarted = true
+    didStart.signal()
     await withCheckedContinuation { continuation in
       releaseContinuation = continuation
     }
-    hasReturned = true
+    didReturn.signal()
     return image
   }
 
   func waitUntilStarted() async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while !hasStarted, clock.now < deadline {
-      await Task.yield()
-    }
-    #expect(hasStarted)
+    await didStart.wait()
   }
 
   func release() {
@@ -446,11 +439,6 @@ private final class BackgroundImageGate {
   }
 
   func waitUntilReturned() async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(1))
-    while !hasReturned, clock.now < deadline {
-      await Task.yield()
-    }
-    #expect(hasReturned)
+    await didReturn.wait()
   }
 }

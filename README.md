@@ -216,8 +216,11 @@ When the focused destination has a `backgroundImageURL`, the host-owned
 of 1,920 pixels by default, applies a dark legibility overlay, and crossfades it
 behind the cards. Focus changes cancel stale work and keep the current image visible
 until its replacement succeeds; a load failure or destination without artwork clears
-the previous image. Reduce Motion disables the crossfade. The sample catalog uses
-Andromeda 17K's first App Store tvOS
+the previous image. A successful `setApps` or provider reload starts a new data
+session, so the same focused artwork is retried after a transient failure. Hosts can
+observe non-cancellation failures with `onImageLoadingFailure`; MoreAppsKit does not
+log or transmit those errors. Reduce Motion disables the crossfade. The sample
+catalog uses Andromeda 17K's first App Store tvOS
 screenshot; for production catalogs, hosting approved artwork on a URL you control
 avoids depending on a storefront asset URL remaining stable.
 
@@ -374,6 +377,11 @@ not require a presenter.
 
 Every public declaration includes DocC documentation in source. Internal reducers,
 cells, event envelopes, and caches remain implementation details.
+
+Remote artwork responses are limited to 8 MiB. Requested decoded dimensions are
+clamped to 4,096 pixels, and the decoded memory cache has a 32 MiB total budget.
+Images whose actual decoded bitmap cost exceeds that budget are returned to the
+caller but are not cached.
 
 ## Architecture and file roles
 

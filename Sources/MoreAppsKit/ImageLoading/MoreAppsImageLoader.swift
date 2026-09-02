@@ -412,6 +412,9 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
 /// the main actor.
 /// Cancelling one caller leaves shared work running for the remaining callers;
 /// cancelling the last caller cancels the shared task and HTTP request.
+/// Remote responses are limited to 8 MiB. The decoded cache has a 32 MiB total
+/// budget, and an image whose actual decoded bitmap cost exceeds that budget is
+/// returned without being cached.
 @MainActor
 public final class MoreAppsImageLoader {
   private struct ImageRequestKey: Hashable, Sendable {
@@ -503,7 +506,7 @@ public final class MoreAppsImageLoader {
 
   /// Returns a cached or downloaded image for a URL.
   ///
-  /// - Parameter url: The remote icon URL.
+  /// - Parameter url: The remote artwork URL.
   /// - Returns: A decoded UIKit image.
   /// - Throws: ``MoreAppsImageLoadingError`` or `CancellationError`.
   public func image(for url: URL) async throws -> UIImage {

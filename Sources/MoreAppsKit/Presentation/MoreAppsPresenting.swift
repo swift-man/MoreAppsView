@@ -39,7 +39,7 @@ public struct MoreAppsPresentationRequest: Equatable, Sendable {
 
 /// The result of presenting an App Store destination.
 public enum MoreAppsPresentationOutcome: Equatable, Sendable {
-  /// The user requested that MoreAppsKit continue to the App Store destination.
+  /// The user requested the validated App Store URL to be opened.
   case appStoreRequested
 
   /// The presentation lifecycle ended without requesting a URL handoff.
@@ -51,7 +51,7 @@ public enum MoreAppsPresentationOutcome: Equatable, Sendable {
   case failed
 }
 
-/// An object that presents platform-appropriate App Store UI.
+/// An object that presents App Store UI on iOS.
 @MainActor
 public protocol MoreAppsPresenting: AnyObject, Sendable {
   /// Presents the destination described by a request.
@@ -117,7 +117,7 @@ struct MoreAppsPresentationClient: Sendable {
     }
   }
 
-  /// Presents a platform-appropriate App Store destination.
+  /// Presents an App Store destination on iOS.
   ///
   /// - Parameter request: The app and destination to present.
   /// - Returns: The outcome reported by the presentation UI.

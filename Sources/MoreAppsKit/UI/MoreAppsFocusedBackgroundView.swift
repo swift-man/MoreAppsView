@@ -8,6 +8,20 @@
 
 import UIKit
 
+private let moreAppsDefaultDimmingAlpha: CGFloat = 0.46
+
+private func moreAppsNormalizedDimmingAlpha(_ value: CGFloat) -> CGFloat {
+  guard value.isFinite else { return moreAppsDefaultDimmingAlpha }
+  return min(max(value, 0), 1)
+}
+
+private func moreAppsNormalizedTransitionDuration(
+  _ value: TimeInterval
+) -> TimeInterval {
+  guard value.isFinite else { return 0 }
+  return max(0, value)
+}
+
 /// A full-screen image view synchronized with the focused tvOS ``MoreAppsView`` card.
 ///
 /// Add this view behind the rest of a host's interface and assign it to
@@ -35,8 +49,20 @@ public final class MoreAppsFocusedBackgroundView: UIView {
   private var imageTask: Task<Void, Never>?
   private var requestedAppID: MoreApp.ID?
   private var requestedImageURL: URL?
+  private var requestedRevision = 0
   private var renderedAppID: MoreApp.ID?
   private var requestGeneration: UInt = 0
+  private var ownerID: UUID?
+
+  var imageRequestDidStart: (() -> Void)?
+  var imageRequestDidFinish: (() -> Void)?
+  var ownerDetachmentDidFinish: ((Bool) -> Void)?
+
+  /// Receives non-cancellation failures while loading focused artwork.
+  ///
+  /// MoreAppsKit does not log or transmit these errors. Use this callback for
+  /// host diagnostics when artwork availability is operationally important.
+  public var onImageLoadingFailure: ((URL, any Error) -> Void)?
 
   /// The opacity of the black overlay placed above focused artwork.
   ///
@@ -44,7 +70,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
   /// `0.46`, which keeps foreground cards legible over bright screenshots.
   public var dimmingAlpha: CGFloat {
     didSet {
-      dimmingAlpha = min(max(dimmingAlpha, 0), 1)
+      dimmingAlpha = moreAppsNormalizedDimmingAlpha(dimmingAlpha)
       if imageView.image != nil {
         dimmingView.alpha = dimmingAlpha
       }
@@ -120,8 +146,10 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     imageProvider: @escaping ImageProvider
   ) {
     self.maximumPixelSize = moreAppsClampedDecodedPixelSize(maximumPixelSize)
-    self.dimmingAlpha = min(max(dimmingAlpha, 0), 1)
-    self.transitionDuration = max(0, transitionDuration)
+    self.dimmingAlpha = moreAppsNormalizedDimmingAlpha(dimmingAlpha)
+    self.transitionDuration = moreAppsNormalizedTransitionDuration(
+      transitionDuration
+    )
     self.reduceMotionEnabled = reduceMotionEnabled
     self.transitionPerformer = transitionPerformer
     self.imageProvider = imageProvider
@@ -145,9 +173,17 @@ public final class MoreAppsFocusedBackgroundView: UIView {
   func display(
     appID: MoreApp.ID?,
     imageURL: URL?,
+    requestRevision: Int = 0,
+    ownerID: UUID? = nil,
     animated: Bool = true
   ) {
-    guard requestedAppID != appID || requestedImageURL != imageURL else {
+    guard ownerID == nil || self.ownerID == ownerID else { return }
+
+    guard
+      requestedAppID != appID
+        || requestedImageURL != imageURL
+        || requestedRevision != requestRevision
+    else {
       return
     }
 
@@ -157,6 +193,7 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     let generation = requestGeneration
     requestedAppID = appID
     requestedImageURL = imageURL
+    requestedRevision = requestRevision
 
     guard let appID, let imageURL else {
       setImage(nil, appID: nil, animated: animated)
@@ -164,6 +201,8 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     }
 
     imageTask = Task { [weak self, imageProvider, maximumPixelSize] in
+      defer { self?.imageRequestDidFinish?() }
+
       do {
         let image = try await imageProvider(imageURL, maximumPixelSize)
         try Task.checkCancellation()
@@ -176,18 +215,46 @@ public final class MoreAppsFocusedBackgroundView: UIView {
         }
         self.imageTask = nil
         self.setImage(image, appID: appID, animated: animated)
-      } catch {
+      } catch is CancellationError {
         guard let self,
           self.requestGeneration == generation,
           self.requestedAppID == appID,
-          self.requestedImageURL == imageURL
+          self.requestedImageURL == imageURL,
+          self.requestedRevision == requestRevision
         else {
           return
         }
         self.imageTask = nil
         self.setImage(nil, appID: nil, animated: animated)
+      } catch {
+        guard let self,
+          self.requestGeneration == generation,
+          self.requestedAppID == appID,
+          self.requestedImageURL == imageURL,
+          self.requestedRevision == requestRevision
+        else {
+          return
+        }
+        self.imageTask = nil
+        self.onImageLoadingFailure?(imageURL, error)
+        self.setImage(nil, appID: nil, animated: animated)
       }
     }
+    imageRequestDidStart?()
+  }
+
+  func attach(ownerID: UUID) {
+    self.ownerID = ownerID
+  }
+
+  func detach(ownerID: UUID) {
+    guard self.ownerID == ownerID else {
+      ownerDetachmentDidFinish?(false)
+      return
+    }
+    self.ownerID = nil
+    display(appID: nil, imageURL: nil, animated: false)
+    ownerDetachmentDidFinish?(true)
   }
 
   var displayedImage: UIImage? {

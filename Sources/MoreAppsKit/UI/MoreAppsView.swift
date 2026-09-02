@@ -37,8 +37,13 @@ public final class MoreAppsView: UIView {
   public weak var focusedBackgroundView: MoreAppsFocusedBackgroundView? {
     didSet {
       guard oldValue !== focusedBackgroundView else { return }
-      oldValue?.display(appID: nil, imageURL: nil, animated: false)
-      renderFocusedBackground(appID: store.focusedAppID)
+      oldValue?.detach(ownerID: focusedBackgroundOwnerID)
+      focusedBackgroundView?.attach(ownerID: focusedBackgroundOwnerID)
+      renderFocusedBackground(
+        appID: store.focusedAppID,
+        imageURL: store.focusedBackgroundImageURL,
+        dataSessionID: store.dataSessionID
+      )
     }
   }
 
@@ -48,6 +53,7 @@ public final class MoreAppsView: UIView {
   private let collectionView: UICollectionView
   private let titleLabel = UILabel()
   private let store: StoreOf<MoreAppsFeature>
+  private let focusedBackgroundOwnerID = UUID()
   private var dataSource: UICollectionViewDiffableDataSource<Section, MoreApp.ID>!
   private var provider: MoreAppsProviderClient?
   private var currentApps: [MoreApp.ID: MoreApp] = [:]
@@ -179,6 +185,11 @@ public final class MoreAppsView: UIView {
   }
 
   deinit {
+    let backgroundView = focusedBackgroundView
+    let ownerID = focusedBackgroundOwnerID
+    Task { @MainActor [weak backgroundView, ownerID] in
+      backgroundView?.detach(ownerID: ownerID)
+    }
     eventDeliveryTask?.cancel()
   }
 
@@ -369,21 +380,29 @@ public final class MoreAppsView: UIView {
       guard let self else { return }
       self.render(
         apps: self.store.apps,
-        focusedAppID: self.store.focusedAppID
+        focusedAppID: self.store.focusedAppID,
+        focusedBackgroundImageURL: self.store.focusedBackgroundImageURL,
+        dataSessionID: self.store.dataSessionID
       )
     }
   }
 
   private func render(
     apps: [MoreApp],
-    focusedAppID: MoreApp.ID?
+    focusedAppID: MoreApp.ID?,
+    focusedBackgroundImageURL: URL?,
+    dataSessionID: Int
   ) {
     isHidden = configuration.hidesWhenEmpty && apps.isEmpty
 
     if apps != currentOrderedApps {
       applySnapshot(apps: apps)
     }
-    renderFocusedBackground(appID: focusedAppID)
+    renderFocusedBackground(
+      appID: focusedAppID,
+      imageURL: focusedBackgroundImageURL,
+      dataSessionID: dataSessionID
+    )
 
     // Keep this observation active so reducer-enqueued events schedule delivery.
     _ = store.pendingEvents
@@ -422,15 +441,16 @@ public final class MoreAppsView: UIView {
     dataSource.apply(snapshot, animatingDifferences: false)
   }
 
-  private func renderFocusedBackground(appID: MoreApp.ID?) {
-    let imageURL = appID.flatMap { appID in
-      currentApps[appID]?
-        .destination(for: .current)?
-        .backgroundImageURL
-    }
+  private func renderFocusedBackground(
+    appID: MoreApp.ID?,
+    imageURL: URL?,
+    dataSessionID: Int
+  ) {
     focusedBackgroundView?.display(
       appID: appID,
-      imageURL: imageURL
+      imageURL: imageURL,
+      requestRevision: dataSessionID,
+      ownerID: focusedBackgroundOwnerID
     )
   }
 

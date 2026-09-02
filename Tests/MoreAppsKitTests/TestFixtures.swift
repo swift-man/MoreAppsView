@@ -45,3 +45,73 @@ enum TestFixtures {
     )
   }
 }
+
+final class AsyncTestSignal: @unchecked Sendable {
+  private struct Waiter {
+    let targetCount: Int
+    let continuation: CheckedContinuation<Void, Never>
+  }
+
+  private let lock = NSLock()
+  private var count = 0
+  private var waiters: [Waiter] = []
+
+  func signal() {
+    lock.lock()
+    count += 1
+    let readyWaiters = waiters.filter { $0.targetCount <= count }
+    waiters.removeAll { $0.targetCount <= count }
+    lock.unlock()
+
+    for waiter in readyWaiters {
+      waiter.continuation.resume()
+    }
+  }
+
+  func wait(forCount targetCount: Int = 1) async {
+    precondition(targetCount > 0)
+
+    await withCheckedContinuation { continuation in
+      lock.lock()
+      guard count < targetCount else {
+        lock.unlock()
+        continuation.resume()
+        return
+      }
+      waiters.append(
+        Waiter(
+          targetCount: targetCount,
+          continuation: continuation
+        )
+      )
+      lock.unlock()
+    }
+  }
+}
+
+@MainActor
+func waitForImageRequestToFinish(
+  in view: MoreAppsFocusedBackgroundView
+) async {
+  if !view.isLoadingImage {
+    let started = AsyncTestSignal()
+    let previousStartHandler = view.imageRequestDidStart
+    view.imageRequestDidStart = {
+      previousStartHandler?()
+      started.signal()
+    }
+    await started.wait()
+    view.imageRequestDidStart = previousStartHandler
+  }
+
+  guard view.isLoadingImage else { return }
+
+  let completion = AsyncTestSignal()
+  let previousHandler = view.imageRequestDidFinish
+  view.imageRequestDidFinish = {
+    previousHandler?()
+    completion.signal()
+  }
+  await completion.wait()
+  view.imageRequestDidFinish = previousHandler
+}

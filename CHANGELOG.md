@@ -19,6 +19,12 @@
   full-screen artwork independently from card-sized icons.
 - Keep the current tvOS background visible until its replacement succeeds, and avoid
   caching decoded artwork whose actual bitmap cost exceeds the memory-cache budget.
+- Derive focused artwork from the reducer's injected platform and retry the same URL
+  when a successful catalog update starts a new data session.
+- Clear host-owned focus artwork when `MoreAppsView` is released, while ownership
+  tokens prevent a stale view cleanup from clearing artwork after host reuse.
+- Provide an optional artwork failure callback for host diagnostics, normalize
+  non-finite dimming input, and replace scheduler polling with async test signals.
 
 ## [0.2.0] - 2026-08-23
 

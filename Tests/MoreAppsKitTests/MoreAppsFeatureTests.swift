@@ -32,13 +32,61 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
+  func testFocusDerivesArtworkFromTheInjectedPlatform() async {
+    let iOSBackgroundURL = URL(
+      string: "https://example.com/ios-background.png"
+    )!
+    let tvOSBackgroundURL = URL(
+      string: "https://example.com/tvos-background.png"
+    )!
+    let app = MoreApp(
+      id: "sample",
+      bundleIdentifier: "com.example.sample",
+      name: "Sample",
+      destinations: [
+        MoreAppDestination(
+          platform: .iOS,
+          appStoreURL: TestFixtures.iOSStoreURL,
+          backgroundImageURL: iOSBackgroundURL
+        ),
+        MoreAppDestination(
+          platform: .tvOS,
+          appStoreURL: TestFixtures.tvOSStoreURL,
+          backgroundImageURL: tvOSBackgroundURL
+        ),
+      ],
+      sortOrder: 0
+    )
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.apps = [app]
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .tvOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.focusChanged(appID: app.id)) {
+      $0.focusedAppID = app.id
+      $0.focusedBackgroundImageURL = tvOSBackgroundURL
+    }
+  }
+
+  @Test
   func testFilteringOutTheFocusedAppClearsFocus() async {
     let first = TestFixtures.app(id: "first", sortOrder: 0)
-    let second = TestFixtures.app(id: "second", sortOrder: 1)
+    let second = TestFixtures.app(
+      id: "second",
+      backgroundImageURL: TestFixtures.backgroundImageURL,
+      sortOrder: 1
+    )
     var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
     state.sourceApps = [first, second]
     state.apps = [first, second]
     state.focusedAppID = second.id
+    state.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
     let store = TestStore(initialState: state) {
       MoreAppsFeature()
     } withDependencies: {
@@ -52,17 +100,21 @@ struct MoreAppsFeatureTests {
       $0.maximumNumberOfItems = 1
       $0.apps = [first]
       $0.focusedAppID = nil
+      $0.focusedBackgroundImageURL = nil
     }
   }
 
   @Test
   func testNewCatalogClearsAFocusedAppThatWasRemoved() async {
-    let app = TestFixtures.app()
+    let app = TestFixtures.app(
+      backgroundImageURL: TestFixtures.backgroundImageURL
+    )
     let replacement = TestFixtures.app(id: "replacement")
     var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
     state.sourceApps = [app]
     state.apps = [app]
     state.focusedAppID = app.id
+    state.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
     let store = TestStore(initialState: state) {
       MoreAppsFeature()
     } withDependencies: {
@@ -77,6 +129,7 @@ struct MoreAppsFeatureTests {
       $0.apps = [replacement]
       $0.dataSessionID = 1
       $0.focusedAppID = nil
+      $0.focusedBackgroundImageURL = nil
     }
   }
 
@@ -103,6 +156,35 @@ struct MoreAppsFeatureTests {
       $0.sourceApps = [updatedApp]
       $0.apps = [updatedApp]
       $0.dataSessionID = 1
+      $0.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
+    }
+  }
+
+  @Test
+  func testNewCatalogClearsArtworkRemovedFromTheFocusedApp() async {
+    let app = TestFixtures.app(
+      backgroundImageURL: TestFixtures.backgroundImageURL
+    )
+    let updatedApp = TestFixtures.app()
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [app]
+    state.apps = [app]
+    state.focusedAppID = app.id
+    state.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setApps([updatedApp])) {
+      $0.sourceApps = [updatedApp]
+      $0.apps = [updatedApp]
+      $0.dataSessionID = 1
+      $0.focusedBackgroundImageURL = nil
     }
   }
 

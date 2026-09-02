@@ -24,6 +24,7 @@ struct MoreAppsFeature: Reducer {
     var openingAppIDs = Set<MoreApp.ID>()
     var presentingAppID: MoreApp.ID?
     var focusedAppID: MoreApp.ID?
+    var focusedBackgroundImageURL: URL?
     var pendingEvents: [EventEnvelope] = []
     var dataSessionID = 0
     var nextEventID = 0
@@ -186,11 +187,7 @@ struct MoreAppsFeature: Reducer {
         return .none
 
       case .focusChanged(let appID):
-        state.focusedAppID = appID.flatMap { candidateID in
-          state.apps.contains(where: { $0.id == candidateID })
-            ? candidateID
-            : nil
-        }
+        updateFocusedDestination(appID: appID, in: &state)
         return .none
 
       case .selected(let appID):
@@ -370,11 +367,27 @@ struct MoreAppsFeature: Reducer {
       state.openingAppIDs.removeAll()
       state.presentingAppID = nil
     }
-    if let focusedAppID = state.focusedAppID,
-      !state.apps.contains(where: { $0.id == focusedAppID })
-    {
+    updateFocusedDestination(appID: state.focusedAppID, in: &state)
+  }
+
+  private func updateFocusedDestination(
+    appID: MoreApp.ID?,
+    in state: inout State
+  ) {
+    guard
+      let appID,
+      let app = state.apps.first(where: { $0.id == appID })
+    else {
       state.focusedAppID = nil
+      state.focusedBackgroundImageURL = nil
+      return
     }
+
+    state.focusedAppID = appID
+    state.focusedBackgroundImageURL =
+      app
+      .destination(for: environment.platform)?
+      .backgroundImageURL
   }
 
   private func directOpenEffect(
