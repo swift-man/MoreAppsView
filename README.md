@@ -234,6 +234,9 @@ presented. Additional selections are ignored until that URL handoff completes, s
 multiple external destinations cannot race. tvOS does not provide `SKOverlay` or an
 in-app App Store product controller, so the final App Store experience always belongs
 to the system.
+Replacing the catalog does not unlock an already-started system URL handoff. Its
+completion releases the selection lock, while an obsolete deep-link failure cannot
+continue to the previous catalog's App Store fallback.
 
 See [Samples/tvOS/MoreAppsExampleViewController.swift](Samples/tvOS/MoreAppsExampleViewController.swift)
 for a complete example.

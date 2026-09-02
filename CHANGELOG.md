@@ -24,7 +24,8 @@
 - Clear host-owned focus artwork when `MoreAppsView` is released, while ownership
   tokens prevent a stale view cleanup from clearing artwork after host reuse.
 - Retry identical focus artwork when ownership moves to a new `MoreAppsView`, and
-  serialize URL handoffs so rapid selections cannot launch competing destinations.
+  serialize URL handoffs across catalog replacements so rapid selections cannot launch
+  competing destinations or continue a stale App Store fallback.
 - Provide an optional artwork failure callback for host diagnostics, normalize
   non-finite dimming input, and replace scheduler polling with bounded async test
   signals.

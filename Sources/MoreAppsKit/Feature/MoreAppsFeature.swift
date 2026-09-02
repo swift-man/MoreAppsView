@@ -53,6 +53,11 @@ struct MoreAppsFeature: Reducer {
     case itemBecameVisible(appID: MoreApp.ID)
     case focusChanged(appID: MoreApp.ID?)
     case selected(appID: MoreApp.ID)
+    case deepLinkFailed(
+      dataSessionID: Int,
+      appID: MoreApp.ID,
+      continuation: DeepLinkContinuation
+    )
     case openFinished(
       dataSessionID: Int,
       appID: MoreApp.ID,
@@ -77,9 +82,13 @@ struct MoreAppsFeature: Reducer {
     case failed
   }
 
+  enum DeepLinkContinuation: Equatable, Sendable {
+    case appStore
+    case presentation
+  }
+
   private enum CancelID {
     case load
-    case open
     case presentation
   }
 
@@ -96,7 +105,6 @@ struct MoreAppsFeature: Reducer {
         apply(apps, to: &state)
         return .merge(
           .cancel(id: CancelID.load),
-          .cancel(id: CancelID.open),
           .cancel(id: CancelID.presentation)
         )
 
@@ -165,10 +173,7 @@ struct MoreAppsFeature: Reducer {
         state.isLoading = false
         state.activeLoadID = nil
         apply(apps, to: &state)
-        return .merge(
-          .cancel(id: CancelID.open),
-          .cancel(id: CancelID.presentation)
-        )
+        return .cancel(id: CancelID.presentation)
 
       case .loadFailed(let id, let message):
         guard state.activeLoadID == id else { return .none }
@@ -221,10 +226,17 @@ struct MoreAppsFeature: Reducer {
           platform == .iOS
         else {
           state.openingAppIDs.insert(appID)
-          return directOpenEffect(
+          if let deepLinkURL {
+            return deepLinkOpenEffect(
+              dataSessionID: dataSessionID,
+              appID: appID,
+              deepLinkURL: deepLinkURL,
+              continuation: .appStore
+            )
+          }
+          return appStoreOpenEffect(
             dataSessionID: dataSessionID,
             appID: appID,
-            deepLinkURL: deepLinkURL,
             appStoreURL: appStoreURL
           )
         }
@@ -245,44 +257,81 @@ struct MoreAppsFeature: Reducer {
           )
         }
 
-        return .run { send in
-          if let deepLinkURL {
-            let didOpenDeepLink = await openURL(deepLinkURL)
-            guard !Task.isCancelled else { return }
-            if didOpenDeepLink {
-              await send(
-                .openFinished(
-                  dataSessionID: dataSessionID,
-                  appID: appID,
-                  outcome: .app
-                )
-              )
-              return
-            }
-          }
-
-          guard let request else {
-            await send(
-              .openFinished(
-                dataSessionID: dataSessionID,
-                appID: appID,
-                outcome: .failed
-              )
-            )
-            return
-          }
-
-          let outcome = await present(request)
-          guard !Task.isCancelled else { return }
-          await send(
-            .presentationFinished(
-              dataSessionID: dataSessionID,
-              appID: appID,
-              outcome: outcome
-            )
+        if let deepLinkURL {
+          state.openingAppIDs.insert(appID)
+          return deepLinkOpenEffect(
+            dataSessionID: dataSessionID,
+            appID: appID,
+            deepLinkURL: deepLinkURL,
+            continuation: .presentation
           )
         }
-        .cancellable(id: CancelID.presentation, cancelInFlight: true)
+        guard let request else {
+          state.presentingAppID = nil
+          enqueue(.failedToOpen(appID: appID), in: &state)
+          return .none
+        }
+        return presentationEffect(
+          dataSessionID: dataSessionID,
+          appID: appID,
+          request: request
+        )
+
+      case .deepLinkFailed(
+        let dataSessionID,
+        let appID,
+        let continuation
+      ):
+        state.openingAppIDs.remove(appID)
+        guard state.dataSessionID == dataSessionID else {
+          return .none
+        }
+
+        guard let app = state.apps.first(where: { $0.id == appID }),
+          let destination = app.destination(for: environment.platform),
+          let appStoreURL = MoreAppsURLPolicy.allowedAppStoreURL(
+            destination.appStoreURL
+          )
+        else {
+          if state.presentingAppID == appID {
+            state.presentingAppID = nil
+          }
+          enqueue(.failedToOpen(appID: appID), in: &state)
+          return .none
+        }
+
+        switch continuation {
+        case .appStore:
+          state.openingAppIDs.insert(appID)
+          return appStoreOpenEffect(
+            dataSessionID: dataSessionID,
+            appID: appID,
+            appStoreURL: appStoreURL
+          )
+
+        case .presentation:
+          guard state.presentingAppID == appID else { return .none }
+          let request = MoreAppsPresentationRequest(
+            app: app,
+            destination: MoreAppDestination(
+              platform: destination.platform,
+              appStoreURL: appStoreURL,
+              deepLinkURL: MoreAppsURLPolicy.allowedDeepLink(
+                destination.deepLinkURL,
+                allowedCustomSchemes: state.allowedCustomDeepLinkSchemes
+              ),
+              backgroundImageURL: destination.backgroundImageURL
+            ),
+            appStoreIdentifier: MoreAppsURLPolicy.appStoreIdentifier(
+              from: appStoreURL
+            )
+          )
+          return presentationEffect(
+            dataSessionID: dataSessionID,
+            appID: appID,
+            request: request
+          )
+        }
 
       case .presentationFinished(
         let dataSessionID,
@@ -317,18 +366,17 @@ struct MoreAppsFeature: Reducer {
           return .none
         }
         state.openingAppIDs.insert(appID)
-        return directOpenEffect(
+        return appStoreOpenEffect(
           dataSessionID: dataSessionID,
           appID: appID,
-          deepLinkURL: nil,
           appStoreURL: appStoreURL
         )
 
       case .openFinished(let dataSessionID, let appID, let outcome):
+        state.openingAppIDs.remove(appID)
         guard state.dataSessionID == dataSessionID else {
           return .none
         }
-        state.openingAppIDs.remove(appID)
         if state.presentingAppID == appID {
           state.presentingAppID = nil
         }
@@ -364,7 +412,6 @@ struct MoreAppsFeature: Reducer {
     if resettingImpressions {
       state.dataSessionID += 1
       state.impressedAppIDs.removeAll()
-      state.openingAppIDs.removeAll()
       state.presentingAppID = nil
     }
     updateFocusedDestination(appID: state.focusedAppID, in: &state)
@@ -390,30 +437,43 @@ struct MoreAppsFeature: Reducer {
       .backgroundImageURL
   }
 
-  private func directOpenEffect(
+  private func deepLinkOpenEffect(
     dataSessionID: Int,
     appID: MoreApp.ID,
-    deepLinkURL: URL?,
-    appStoreURL: URL?
+    deepLinkURL: URL,
+    continuation: DeepLinkContinuation
   ) -> Effect<Action> {
     .run { send in
       guard !Task.isCancelled else { return }
-
-      if let deepLinkURL {
-        let didOpenDeepLink = await openURL(deepLinkURL)
-        guard !Task.isCancelled else { return }
-        if didOpenDeepLink {
-          await send(
-            .openFinished(
-              dataSessionID: dataSessionID,
-              appID: appID,
-              outcome: .app
-            )
+      let didOpenDeepLink = await openURL(deepLinkURL)
+      guard !Task.isCancelled else { return }
+      if didOpenDeepLink {
+        await send(
+          .openFinished(
+            dataSessionID: dataSessionID,
+            appID: appID,
+            outcome: .app
           )
-          return
-        }
+        )
+        return
       }
 
+      await send(
+        .deepLinkFailed(
+          dataSessionID: dataSessionID,
+          appID: appID,
+          continuation: continuation
+        )
+      )
+    }
+  }
+
+  private func appStoreOpenEffect(
+    dataSessionID: Int,
+    appID: MoreApp.ID,
+    appStoreURL: URL?
+  ) -> Effect<Action> {
+    .run { send in
       guard !Task.isCancelled else { return }
       guard let appStoreURL else {
         await send(
@@ -436,7 +496,25 @@ struct MoreAppsFeature: Reducer {
         )
       )
     }
-    .cancellable(id: CancelID.open)
+  }
+
+  private func presentationEffect(
+    dataSessionID: Int,
+    appID: MoreApp.ID,
+    request: MoreAppsPresentationRequest
+  ) -> Effect<Action> {
+    .run { send in
+      let outcome = await present(request)
+      guard !Task.isCancelled else { return }
+      await send(
+        .presentationFinished(
+          dataSessionID: dataSessionID,
+          appID: appID,
+          outcome: outcome
+        )
+      )
+    }
+    .cancellable(id: CancelID.presentation, cancelInFlight: true)
   }
 
   private func enqueue(

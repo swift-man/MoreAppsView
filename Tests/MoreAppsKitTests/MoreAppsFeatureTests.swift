@@ -242,6 +242,18 @@ struct MoreAppsFeatureTests {
     }
     await store.receive({ action in
       guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    })
+    await store.receive({ action in
+      guard
         case .openFinished(
           dataSessionID: 0,
           appID: "sample",
@@ -314,6 +326,7 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
+      $0.openingAppIDs = ["sample"]
       $0.presentingAppID = "sample"
       $0.nextEventID = 1
       $0.pendingEvents = [
@@ -332,6 +345,7 @@ struct MoreAppsFeatureTests {
       }
       return true
     }) {
+      $0.openingAppIDs = []
       $0.presentingAppID = nil
       $0.nextEventID = 2
       $0.pendingEvents.append(
@@ -357,6 +371,7 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
+      $0.openingAppIDs = ["sample"]
       $0.presentingAppID = "sample"
       $0.nextEventID = 1
       $0.pendingEvents = [
@@ -375,6 +390,7 @@ struct MoreAppsFeatureTests {
       }
       return true
     }) {
+      $0.openingAppIDs = []
       $0.presentingAppID = nil
       $0.nextEventID = 2
       $0.pendingEvents.append(
@@ -400,11 +416,26 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
+      $0.openingAppIDs = ["sample"]
       $0.presentingAppID = "sample"
       $0.nextEventID = 1
       $0.pendingEvents = [
         .init(id: 1, event: .selected(appID: "sample"))
       ]
+    }
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .presentation
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
     }
     await store.receive({ action in
       guard
@@ -530,6 +561,18 @@ struct MoreAppsFeatureTests {
     }
     await store.receive({ action in
       guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    })
+    await store.receive({ action in
+      guard
         case .openFinished(
           dataSessionID: 0,
           appID: "sample",
@@ -613,6 +656,18 @@ struct MoreAppsFeatureTests {
         .init(id: 1, event: .selected(appID: "sample"))
       ]
     }
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    })
     await store.receive({ action in
       guard
         case .openFinished(
@@ -1400,6 +1455,18 @@ struct MoreAppsFeatureTests {
     }
     await store.receive({ action in
       guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    })
+    await store.receive({ action in
+      guard
         case .openFinished(
           dataSessionID: 0,
           appID: "sample",
@@ -1551,7 +1618,6 @@ struct MoreAppsFeatureTests {
     await store.send(.setApps([replacement])) {
       $0.sourceApps = [replacement]
       $0.apps = [replacement]
-      $0.openingAppIDs = []
       $0.dataSessionID = 1
     }
     await store.send(
@@ -1560,7 +1626,9 @@ struct MoreAppsFeatureTests {
         appID: oldApp.id,
         outcome: .app
       )
-    )
+    ) {
+      $0.openingAppIDs = []
+    }
     await store.send(.selected(appID: replacement.id)) {
       $0.openingAppIDs = [replacement.id]
       $0.nextEventID = 1
@@ -1589,7 +1657,7 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testReplacingCatalogPreventsStaleAppStoreFallback() async {
+  func testReplacingCatalogKeepsExternalOpenSerialized() async {
     let oldApp = TestFixtures.app()
     let replacement = TestFixtures.app(
       id: "replacement",
@@ -1627,12 +1695,122 @@ struct MoreAppsFeatureTests {
     await store.send(.setApps([replacement])) {
       $0.sourceApps = [replacement]
       $0.apps = [replacement]
-      $0.openingAppIDs = []
       $0.dataSessionID = 1
     }
+    await store.send(.selected(appID: replacement.id))
 
     recorder.finishFirstOpen(with: false)
-    await store.finish()
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: oldApp.id,
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+    }
+
+    #expect(recorder.openedURLs == [TestFixtures.deepLinkURL])
+
+    await store.send(.selected(appID: replacement.id)) {
+      $0.openingAppIDs = [replacement.id]
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .selected(appID: replacement.id))
+      )
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 1,
+          appID: replacement.id,
+          outcome: .app
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+      $0.nextEventID = 3
+      $0.pendingEvents.append(
+        .init(id: 3, event: .openedApp(appID: replacement.id))
+      )
+    }
+
+    #expect(
+      recorder.openedURLs
+        == [TestFixtures.deepLinkURL, TestFixtures.deepLinkURL]
+    )
+  }
+
+  @Test
+  func testLoadedCatalogKeepsExternalOpenSerialized() async {
+    let oldApp = TestFixtures.app()
+    let replacement = TestFixtures.app(
+      id: "replacement",
+      bundleIdentifier: "com.example.new"
+    )
+    var state = MoreAppsFeature.State(
+      maximumNumberOfItems: nil,
+      allowedCustomDeepLinkSchemes: ["sample"]
+    )
+    state.sourceApps = [oldApp]
+    state.apps = [oldApp]
+    state.isLoading = true
+    state.activeLoadID = 1
+    let recorder = DeferredOpenRecorder()
+
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+      $0.moreAppsOpen = MoreAppsOpenClient { url in
+        await recorder.open(url)
+      }
+    }
+
+    await store.send(.selected(appID: oldApp.id)) {
+      $0.openingAppIDs = [oldApp.id]
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: oldApp.id))
+      ]
+    }
+    await recorder.waitUntilFirstOpenStarts()
+
+    await store.send(.loadSucceeded(id: 1, apps: [replacement])) {
+      $0.sourceApps = [replacement]
+      $0.apps = [replacement]
+      $0.isLoading = false
+      $0.activeLoadID = nil
+      $0.dataSessionID = 1
+    }
+    await store.send(.selected(appID: replacement.id))
+
+    recorder.finishFirstOpen(with: false)
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: oldApp.id,
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+    }
 
     #expect(recorder.openedURLs == [TestFixtures.deepLinkURL])
   }
