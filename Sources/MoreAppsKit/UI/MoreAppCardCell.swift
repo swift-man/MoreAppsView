@@ -149,35 +149,27 @@ final class MoreAppCardCell: UICollectionViewCell {
     iconImageView.image = placeholder
     iconImageView.tintColor = .secondaryLabel
 
-    let presentsOptions =
-      configuration.selectionBehavior == .platformPresentation
     #if os(iOS)
-      let presentationActionKey: String.LocalizationValue =
-        "more_apps_open_or_view_action"
-      let presentationHintKey: String.LocalizationValue =
-        "more_apps_open_or_view_hint"
+      let presentsOptions =
+        configuration.selectionBehavior == .platformPresentation
+      let actionKey: String.LocalizationValue =
+        presentsOptions
+        ? "more_apps_open_or_view_action"
+        : "more_apps_open_action"
+      let hintKey: String.LocalizationValue =
+        presentsOptions
+        ? "more_apps_open_or_view_hint"
+        : "more_apps_open_hint"
     #else
-      let presentationActionKey: String.LocalizationValue =
-        "more_apps_view_action"
-      let presentationHintKey: String.LocalizationValue =
-        "more_apps_view_hint"
+      let actionKey: String.LocalizationValue = "more_apps_open_action"
+      let hintKey: String.LocalizationValue = "more_apps_open_hint"
     #endif
-    let action = String(
-      localized: presentsOptions
-        ? presentationActionKey
-        : "more_apps_open_action",
-      bundle: .module
-    )
+    let action = String(localized: actionKey, bundle: .module)
     accessibilityLabel = [app.name, app.subtitle, action]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
       .joined(separator: ", ")
-    accessibilityHint = String(
-      localized: presentsOptions
-        ? presentationHintKey
-        : "more_apps_open_hint",
-      bundle: .module
-    )
+    accessibilityHint = String(localized: hintKey, bundle: .module)
 
     guard let iconURL = app.iconURL else {
       return

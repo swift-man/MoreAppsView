@@ -28,12 +28,34 @@ public final class MoreAppsView: UIView {
     didSet { scheduleEventDeliveryIfNeeded() }
   }
 
+  /// A host-owned full-screen view that displays the focused app's artwork.
+  ///
+  /// Place the background view behind the host interface before assigning it.
+  /// MoreAppsView keeps only a weak reference and synchronizes tvOS Focus Engine
+  /// changes with the current destination's
+  /// ``MoreAppDestination/backgroundImageURL``.
+  /// Do not share one background view between multiple live MoreAppsView
+  /// instances; ownership is exclusive and the most recent assignment wins.
+  public weak var focusedBackgroundView: MoreAppsFocusedBackgroundView? {
+    didSet {
+      guard oldValue !== focusedBackgroundView else { return }
+      oldValue?.detach(ownerID: focusedBackgroundOwnerID)
+      focusedBackgroundView?.attach(ownerID: focusedBackgroundOwnerID)
+      renderFocusedBackground(
+        appID: store.focusedAppID,
+        imageURL: store.focusedBackgroundImageURL,
+        dataSessionID: store.dataSessionID
+      )
+    }
+  }
+
   private var configuration: MoreAppsConfiguration
   private let imageLoader: MoreAppsImageLoader
   private let flowLayout: UICollectionViewFlowLayout
   private let collectionView: UICollectionView
   private let titleLabel = UILabel()
   private let store: StoreOf<MoreAppsFeature>
+  private let focusedBackgroundOwnerID = UUID()
   private var dataSource: UICollectionViewDiffableDataSource<Section, MoreApp.ID>!
   private var provider: MoreAppsProviderClient?
   private var currentApps: [MoreApp.ID: MoreApp] = [:]
@@ -64,8 +86,8 @@ public final class MoreAppsView: UIView {
   /// Creates a More Apps view with the package's platform presenter.
   ///
   /// Use this initializer with ``MoreAppsSelectionBehavior/platformPresentation``
-  /// to present an App Store overlay on iOS or a full-screen app preview on
-  /// tvOS.
+  /// to present an App Store overlay on iOS. tvOS always opens its validated
+  /// app or App Store destination immediately and does not present package UI.
   /// The presenter keeps only a weak reference to the supplied view controller.
   ///
   /// - Parameters:
@@ -80,8 +102,7 @@ public final class MoreAppsView: UIView {
       configuration: configuration,
       opener: DefaultMoreAppsOpener.shared,
       presenter: DefaultMoreAppsPresenter(
-        presentingViewController: presentingViewController,
-        imageLoader: imageLoader
+        presentingViewController: presentingViewController
       ),
       imageLoader: imageLoader
     )
@@ -113,7 +134,8 @@ public final class MoreAppsView: UIView {
   ///   - opener: The object used for deep links and App Store URLs.
   ///   - presenter: An optional platform presentation implementation. In
   ///     platform-presentation mode, iOS falls back to `opener` when it is
-  ///     absent or fails; tvOS reports the failure without a URL handoff.
+  ///     absent or fails. tvOS bypasses this collaborator and opens its
+  ///     destination immediately.
   ///   - imageLoader: The loader used for remote app icons.
   public init(
     configuration: MoreAppsConfiguration,
@@ -165,6 +187,11 @@ public final class MoreAppsView: UIView {
   }
 
   deinit {
+    let backgroundView = focusedBackgroundView
+    let ownerID = focusedBackgroundOwnerID
+    Task { @MainActor [weak backgroundView, ownerID] in
+      backgroundView?.detach(ownerID: ownerID)
+    }
     eventDeliveryTask?.cancel()
   }
 
@@ -353,16 +380,31 @@ public final class MoreAppsView: UIView {
   private func bindStore() {
     observe { [weak self] in
       guard let self else { return }
-      self.render(apps: self.store.apps)
+      self.render(
+        apps: self.store.apps,
+        focusedAppID: self.store.focusedAppID,
+        focusedBackgroundImageURL: self.store.focusedBackgroundImageURL,
+        dataSessionID: self.store.dataSessionID
+      )
     }
   }
 
-  private func render(apps: [MoreApp]) {
+  private func render(
+    apps: [MoreApp],
+    focusedAppID: MoreApp.ID?,
+    focusedBackgroundImageURL: URL?,
+    dataSessionID: Int
+  ) {
     isHidden = configuration.hidesWhenEmpty && apps.isEmpty
 
     if apps != currentOrderedApps {
       applySnapshot(apps: apps)
     }
+    renderFocusedBackground(
+      appID: focusedAppID,
+      imageURL: focusedBackgroundImageURL,
+      dataSessionID: dataSessionID
+    )
 
     // Keep this observation active so reducer-enqueued events schedule delivery.
     _ = store.pendingEvents
@@ -400,6 +442,28 @@ public final class MoreAppsView: UIView {
     snapshot.reconfigureItems(snapshot.itemIdentifiers)
     dataSource.apply(snapshot, animatingDifferences: false)
   }
+
+  private func renderFocusedBackground(
+    appID: MoreApp.ID?,
+    imageURL: URL?,
+    dataSessionID: Int
+  ) {
+    focusedBackgroundView?.display(
+      appID: appID,
+      imageURL: imageURL,
+      requestRevision: dataSessionID,
+      ownerID: focusedBackgroundOwnerID
+    )
+  }
+
+  #if os(tvOS)
+    func updateFocusedApp(at indexPath: IndexPath?) {
+      let appID: MoreApp.ID? = indexPath.flatMap {
+        dataSource.itemIdentifier(for: $0)
+      }
+      store.send(.focusChanged(appID: appID))
+    }
+  #endif
 
   private func scheduleEventDeliveryIfNeeded() {
     guard eventDeliveryTask == nil,
@@ -517,6 +581,17 @@ public final class MoreAppsView: UIView {
 }
 
 extension MoreAppsView: UICollectionViewDelegate {
+  #if os(tvOS)
+    /// Synchronizes Focus Engine changes with optional background artwork.
+    public func collectionView(
+      _ collectionView: UICollectionView,
+      didUpdateFocusIn context: UICollectionViewFocusUpdateContext,
+      with coordinator: UIFocusAnimationCoordinator
+    ) {
+      updateFocusedApp(at: context.nextFocusedIndexPath)
+    }
+  #endif
+
   /// Handles selection of a promoted app card.
   public func collectionView(
     _ collectionView: UICollectionView,

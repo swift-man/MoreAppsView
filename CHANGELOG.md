@@ -1,18 +1,34 @@
 # Changelog
 
-## [0.2.1] - 2026-08-31
+## [0.2.1] - 2026-09-02
 
 ### Added
 
-- Let tvOS users open an installed promoted app from its preview, with automatic fallback
+- Let tvOS selections immediately open an installed promoted app, with automatic fallback
   to the system App Store when the app cannot be opened.
+- Add optional platform-specific focus artwork and a host-owned full-screen background
+  view with stale-request cancellation, dimming, crossfade, and Reduce Motion support.
 
 ### Changed
 
-- Present selected tvOS apps in a focus-aware full-screen preview and place initial focus
-  on the destination action.
-- Clarify the destination action and VoiceOver guidance in English and Korean, and document
-  that tvOS hands App Store URLs to the system rather than embedding a product page.
+- Bypass platform presentation on tvOS so selecting a card never shows an intermediate
+  popup or package-owned preview.
+- Keep card VoiceOver guidance aligned with the immediate deep-link-first, App Store
+  fallback behavior.
+- Use Andromeda 17K's first tvOS App Store screenshot in the sample catalog and decode
+  full-screen artwork independently from card-sized icons.
+- Keep the current tvOS background visible until its replacement succeeds, and avoid
+  caching decoded artwork whose actual bitmap cost exceeds the memory-cache budget.
+- Derive focused artwork from the reducer's injected platform and retry the same URL
+  when a successful catalog update starts a new data session.
+- Clear host-owned focus artwork when `MoreAppsView` is released, while ownership
+  tokens prevent a stale view cleanup from clearing artwork after host reuse.
+- Retry identical focus artwork when ownership moves to a new `MoreAppsView`, and
+  serialize URL handoffs across catalog replacements so rapid selections cannot launch
+  competing destinations or continue a stale App Store fallback.
+- Provide an optional artwork failure callback for host diagnostics, normalize
+  non-finite dimming input, and replace scheduler polling with bounded async test
+  signals.
 
 ## [0.2.0] - 2026-08-23
 

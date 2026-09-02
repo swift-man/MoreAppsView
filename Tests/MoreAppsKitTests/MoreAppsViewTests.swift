@@ -12,8 +12,240 @@ import UIKit
 @testable import MoreAppsKit
 
 @MainActor
-@Suite
+@Suite(.serialized)
 struct MoreAppsViewTests {
+  #if os(tvOS)
+    @Test
+    func testTVOSFocusUpdatesTheHostOwnedBackgroundView() async {
+      let image = UIImage(systemName: "sparkles")!
+      let backgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in image }
+      )
+      let view = MoreAppsView()
+      view.focusedBackgroundView = backgroundView
+      view.setApps([
+        TestFixtures.app(
+          platforms: [.tvOS],
+          backgroundImageURL: TestFixtures.backgroundImageURL
+        )
+      ])
+      await Task.yield()
+
+      view.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+      await waitForImageRequestToFinish(in: backgroundView)
+
+      #expect(backgroundView.displayedAppID == "sample")
+      #expect(backgroundView.displayedImage === image)
+
+      let replacementBackgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in image }
+      )
+      view.focusedBackgroundView = replacementBackgroundView
+      await waitForImageRequestToFinish(in: replacementBackgroundView)
+      #expect(backgroundView.displayedImage == nil)
+      #expect(replacementBackgroundView.displayedAppID == "sample")
+
+      view.focusedBackgroundView = replacementBackgroundView
+      #expect(replacementBackgroundView.displayedAppID == "sample")
+
+      view.updateFocusedApp(at: nil)
+      await Task.yield()
+      #expect(replacementBackgroundView.displayedImage == nil)
+    }
+
+    @Test
+    func testTVOSFocusUsesTheTVOSDestinationBackground() async {
+      let iOSBackgroundURL = URL(
+        string: "https://example.com/ios-background.png"
+      )!
+      let tvOSBackgroundURL = URL(
+        string: "https://example.com/tvos-background.png"
+      )!
+      let image = UIImage(systemName: "sparkles")!
+      var requestedURL: URL?
+      let backgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { url, _ in
+          requestedURL = url
+          return image
+        }
+      )
+      let app = MoreApp(
+        id: "sample",
+        bundleIdentifier: "com.example.sample",
+        name: "Sample",
+        subtitle: "Subtitle",
+        destinations: [
+          MoreAppDestination(
+            platform: .iOS,
+            appStoreURL: TestFixtures.iOSStoreURL,
+            backgroundImageURL: iOSBackgroundURL
+          ),
+          MoreAppDestination(
+            platform: .tvOS,
+            appStoreURL: TestFixtures.tvOSStoreURL,
+            backgroundImageURL: tvOSBackgroundURL
+          ),
+        ],
+        sortOrder: 0
+      )
+      let view = MoreAppsView()
+      view.focusedBackgroundView = backgroundView
+      view.setApps([app])
+      await Task.yield()
+
+      view.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+      await waitForImageRequestToFinish(in: backgroundView)
+
+      #expect(backgroundView.displayedAppID == "sample")
+      #expect(requestedURL == tvOSBackgroundURL)
+    }
+
+    @Test
+    func testTVOSNewCatalogSessionRetriesTheSameFocusedArtwork() async {
+      let image = UIImage(systemName: "sparkles")!
+      var requestCount = 0
+      var failureCount = 0
+      let backgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in
+          requestCount += 1
+          if requestCount == 1 {
+            throw MoreAppsImageLoadingError.decodingFailed
+          }
+          return image
+        }
+      )
+      backgroundView.onImageLoadingFailure = { _, _ in
+        failureCount += 1
+      }
+      let app = TestFixtures.app(
+        platforms: [.tvOS],
+        backgroundImageURL: TestFixtures.backgroundImageURL
+      )
+      let view = MoreAppsView()
+      view.focusedBackgroundView = backgroundView
+      view.setApps([app])
+      await Task.yield()
+      view.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+
+      await waitForImageRequestToFinish(in: backgroundView)
+      #expect(requestCount == 1)
+      #expect(failureCount == 1)
+      #expect(backgroundView.displayedImage == nil)
+
+      view.setApps([app])
+      await waitForImageRequestToFinish(in: backgroundView)
+
+      #expect(requestCount == 2)
+      #expect(backgroundView.displayedAppID == app.id)
+      #expect(backgroundView.displayedImage === image)
+    }
+
+    @Test
+    func testTVOSViewDeinitClearsItsHostOwnedBackground() async {
+      let image = UIImage(systemName: "sparkles")!
+      let backgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in image }
+      )
+      var view: MoreAppsView? = MoreAppsView()
+      weak let weakView = view
+      view?.focusedBackgroundView = backgroundView
+      view?.setApps([
+        TestFixtures.app(
+          platforms: [.tvOS],
+          backgroundImageURL: TestFixtures.backgroundImageURL
+        )
+      ])
+      await Task.yield()
+      view?.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+
+      await waitForImageRequestToFinish(in: backgroundView)
+      #expect(backgroundView.displayedImage === image)
+
+      let didDetach = AsyncTestSignal()
+      var detachmentSucceeded = false
+      backgroundView.ownerDetachmentDidFinish = { succeeded in
+        detachmentSucceeded = succeeded
+        didDetach.signal()
+      }
+      view = nil
+
+      #expect(weakView == nil)
+      await didDetach.wait()
+      #expect(detachmentSucceeded)
+      #expect(backgroundView.displayedAppID == nil)
+      #expect(backgroundView.displayedImage == nil)
+      #expect(backgroundView.dimmingOpacity == 0)
+    }
+
+    @Test
+    func testTVOSStaleViewDeinitDoesNotClearReassignedBackground() async {
+      let image = UIImage(systemName: "sparkles")!
+      let backgroundView = MoreAppsFocusedBackgroundView(
+        maximumPixelSize: 1_920,
+        dimmingAlpha: 0.46,
+        transitionDuration: 0,
+        reduceMotionEnabled: { true },
+        transitionPerformer: { _, _, changes in changes() },
+        imageProvider: { _, _ in image }
+      )
+      let app = TestFixtures.app(
+        platforms: [.tvOS],
+        backgroundImageURL: TestFixtures.backgroundImageURL
+      )
+      var previousView: MoreAppsView? = MoreAppsView()
+      previousView?.focusedBackgroundView = backgroundView
+      previousView?.setApps([app])
+      await Task.yield()
+      previousView?.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+      await waitForImageRequestToFinish(in: backgroundView)
+
+      let currentView = MoreAppsView()
+      currentView.setApps([app])
+      await Task.yield()
+      currentView.updateFocusedApp(at: IndexPath(item: 0, section: 0))
+
+      let staleDetachmentAttempted = AsyncTestSignal()
+      var staleDetachmentSucceeded = true
+      backgroundView.ownerDetachmentDidFinish = { succeeded in
+        staleDetachmentSucceeded = succeeded
+        staleDetachmentAttempted.signal()
+      }
+
+      previousView = nil
+      currentView.focusedBackgroundView = backgroundView
+      await staleDetachmentAttempted.wait()
+
+      #expect(!staleDetachmentSucceeded)
+      #expect(backgroundView.displayedAppID == app.id)
+      #expect(backgroundView.displayedImage === image)
+    }
+  #endif
+
   @Test
   func testHidesWhenEmptyAndShowsWhenDisplayable() async {
     let view = MoreAppsView(
@@ -143,8 +375,8 @@ struct MoreAppsViewTests {
       let hintKey: String.LocalizationValue =
         "more_apps_open_or_view_hint"
     #else
-      let actionKey: String.LocalizationValue = "more_apps_view_action"
-      let hintKey: String.LocalizationValue = "more_apps_view_hint"
+      let actionKey: String.LocalizationValue = "more_apps_open_action"
+      let hintKey: String.LocalizationValue = "more_apps_open_hint"
     #endif
     let expectedAction = String(localized: actionKey, bundle: .module)
     let expectedHint = String(localized: hintKey, bundle: .module)
@@ -196,20 +428,13 @@ struct MoreAppsViewTests {
       imageLoader: imageLoader
     )
 
-    let clock = ContinuousClock()
-    let startDeadline = clock.now.advanced(by: .seconds(5))
-    while starts.count == 0, clock.now < startDeadline {
-      try? await Task.sleep(nanoseconds: 10_000_000)
-    }
+    await starts.waitUntilIncremented()
     #expect(starts.count == 1)
 
     cell = nil
 
     #expect(weakCell == nil)
-    let stopDeadline = clock.now.advanced(by: .seconds(5))
-    while stops.count == 0, clock.now < stopDeadline {
-      try? await Task.sleep(nanoseconds: 10_000_000)
-    }
+    await stops.waitUntilIncremented()
     #expect(stops.count == 1)
   }
 
@@ -230,10 +455,12 @@ struct MoreAppsViewTests {
     await Task.yield()
 
     var events: [MoreAppsEvent] = []
-    view.onEvent = { events.append($0) }
-    for _ in 0..<5 {
-      await Task.yield()
+    let eventDelivered = AsyncTestSignal()
+    view.onEvent = {
+      events.append($0)
+      eventDelivered.signal()
     }
+    await eventDelivered.wait()
 
     #expect(events == [.impression(appID: "sample")])
   }
@@ -251,8 +478,10 @@ struct MoreAppsViewTests {
       .first
     var deliveredEventCount = 0
     var shouldRequeue = true
+    let eventDeliveryStarted = AsyncTestSignal()
     view?.onEvent = { [weak capturedView = view] _ in
       deliveredEventCount += 1
+      eventDeliveryStarted.signal()
       guard shouldRequeue,
         let capturedView,
         let collectionView
@@ -277,9 +506,7 @@ struct MoreAppsViewTests {
       willDisplay: UICollectionViewCell(),
       forItemAt: IndexPath(item: 0, section: 0)
     )
-    for _ in 0..<20 where deliveredEventCount == 0 {
-      await Task.yield()
-    }
+    await eventDeliveryStarted.wait()
     guard deliveredEventCount > 0 else {
       Issue.record("Expected event delivery to begin")
       return
@@ -288,9 +515,6 @@ struct MoreAppsViewTests {
     view = nil
     let releasedWhenExternallyUnreferenced = weakView == nil
     shouldRequeue = false
-    for _ in 0..<20 where weakView != nil {
-      await Task.yield()
-    }
 
     #expect(releasedWhenExternallyUnreferenced)
     #expect(weakView == nil)
@@ -313,6 +537,7 @@ private actor CountingProvider: MoreAppsProviding {
 
 private final class CellImageLifecycleCounter {
   private let lock = NSLock()
+  private let didIncrement = AsyncTestSignal()
   private var value = 0
 
   var count: Int {
@@ -325,6 +550,11 @@ private final class CellImageLifecycleCounter {
     lock.lock()
     value += 1
     lock.unlock()
+    didIncrement.signal()
+  }
+
+  func waitUntilIncremented() async {
+    await didIncrement.wait()
   }
 }
 

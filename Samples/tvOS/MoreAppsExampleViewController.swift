@@ -11,8 +11,10 @@ import UIKit
 
 @MainActor
 final class MoreAppsExampleViewController: UIViewController {
-  // Selecting a card presents a full-screen preview. Its explicit action opens
-  // an installed app first, then falls back to the system App Store app.
+  private let focusedBackgroundView = MoreAppsFocusedBackgroundView()
+
+  // Selecting a card opens an installed app immediately, then falls back to
+  // the system App Store app without presenting intermediate package UI.
   private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       title: "More Apps on Apple TV",
@@ -24,18 +26,30 @@ final class MoreAppsExampleViewController: UIViewController {
         trailing: 64
       ),
       allowedCustomDeepLinkSchemes: ["andromeda17k"],
-      selectionBehavior: .platformPresentation
-    ),
-    presentingViewController: self
+      selectionBehavior: .directOpen
+    )
   )
 
   override func viewDidLoad() {
     super.viewDidLoad()
 
+    focusedBackgroundView.translatesAutoresizingMaskIntoConstraints = false
     moreAppsView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(focusedBackgroundView)
     view.addSubview(moreAppsView)
+    moreAppsView.focusedBackgroundView = focusedBackgroundView
 
     NSLayoutConstraint.activate([
+      focusedBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+      focusedBackgroundView.leadingAnchor.constraint(
+        equalTo: view.leadingAnchor
+      ),
+      focusedBackgroundView.trailingAnchor.constraint(
+        equalTo: view.trailingAnchor
+      ),
+      focusedBackgroundView.bottomAnchor.constraint(
+        equalTo: view.bottomAnchor
+      ),
       moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       moreAppsView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -64,7 +78,14 @@ final class MoreAppsExampleViewController: UIViewController {
           appStoreURL: URL(
             string: "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129"
           )!,
-          deepLinkURL: URL(string: "andromeda17k://")
+          deepLinkURL: URL(string: "andromeda17k://"),
+          backgroundImageURL: URL(
+            string: "https://is1-ssl.mzstatic.com/image/thumb/"
+              + "PurpleSource221/v4/f2/47/f8/"
+              + "f247f87c-b756-f833-1307-aee7f81f65db/"
+              + "Simulator_Screenshot_-_Apple_TV_4K__U00283rd_generation_U0029_-_"
+              + "2026-07-29_at_15.54.24.png/1920x1080bb.png"
+          )
         )
       ],
       sortOrder: 20

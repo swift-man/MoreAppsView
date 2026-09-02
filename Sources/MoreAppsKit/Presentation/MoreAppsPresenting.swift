@@ -39,11 +39,7 @@ public struct MoreAppsPresentationRequest: Equatable, Sendable {
 
 /// The result of presenting an App Store destination.
 public enum MoreAppsPresentationOutcome: Equatable, Sendable {
-  /// The user requested that MoreAppsKit continue to the app destination.
-  ///
-  /// On tvOS, MoreAppsKit first tries the destination's validated deep link and
-  /// falls back to its validated App Store URL when the app is not installed.
-  /// On iOS, this requests the validated App Store URL directly.
+  /// The user requested the validated App Store URL to be opened.
   case appStoreRequested
 
   /// The presentation lifecycle ended without requesting a URL handoff.
@@ -51,12 +47,11 @@ public enum MoreAppsPresentationOutcome: Equatable, Sendable {
 
   /// The presentation could not be started or loaded.
   ///
-  /// iOS may fall back to the validated App Store URL. tvOS treats this as a
-  /// failure and does not perform a URL handoff.
+  /// MoreAppsKit may fall back to the validated App Store URL.
   case failed
 }
 
-/// An object that presents platform-appropriate App Store UI.
+/// An object that presents App Store UI on iOS.
 @MainActor
 public protocol MoreAppsPresenting: AnyObject, Sendable {
   /// Presents the destination described by a request.
@@ -122,7 +117,7 @@ struct MoreAppsPresentationClient: Sendable {
     }
   }
 
-  /// Presents a platform-appropriate App Store destination.
+  /// Presents an App Store destination on iOS.
   ///
   /// - Parameter request: The app and destination to present.
   /// - Returns: The outcome reported by the presentation UI.

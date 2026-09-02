@@ -16,6 +16,179 @@ import Testing
 @Suite
 struct MoreAppsFeatureTests {
   @Test
+  func testFocusTracksOnlyAppsInTheFilteredCatalog() async {
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.apps = [TestFixtures.app()]
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    }
+
+    await store.send(.focusChanged(appID: "sample")) {
+      $0.focusedAppID = "sample"
+    }
+    await store.send(.focusChanged(appID: "missing")) {
+      $0.focusedAppID = nil
+    }
+  }
+
+  @Test
+  func testFocusDerivesArtworkFromTheInjectedPlatform() async {
+    let iOSBackgroundURL = URL(
+      string: "https://example.com/ios-background.png"
+    )!
+    let tvOSBackgroundURL = URL(
+      string: "https://example.com/tvos-background.png"
+    )!
+    let app = MoreApp(
+      id: "sample",
+      bundleIdentifier: "com.example.sample",
+      name: "Sample",
+      destinations: [
+        MoreAppDestination(
+          platform: .iOS,
+          appStoreURL: TestFixtures.iOSStoreURL,
+          backgroundImageURL: iOSBackgroundURL
+        ),
+        MoreAppDestination(
+          platform: .tvOS,
+          appStoreURL: TestFixtures.tvOSStoreURL,
+          backgroundImageURL: tvOSBackgroundURL
+        ),
+      ],
+      sortOrder: 0
+    )
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.apps = [app]
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .tvOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.focusChanged(appID: app.id)) {
+      $0.focusedAppID = app.id
+      $0.focusedBackgroundImageURL = tvOSBackgroundURL
+    }
+  }
+
+  @Test
+  func testFilteringOutTheFocusedAppClearsFocus() async {
+    let first = TestFixtures.app(id: "first", sortOrder: 0)
+    let second = TestFixtures.app(
+      id: "second",
+      backgroundImageURL: TestFixtures.backgroundImageURL,
+      sortOrder: 1
+    )
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [first, second]
+    state.apps = [first, second]
+    state.focusedAppID = second.id
+    state.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setMaximumNumberOfItems(1)) {
+      $0.maximumNumberOfItems = 1
+      $0.apps = [first]
+      $0.focusedAppID = nil
+      $0.focusedBackgroundImageURL = nil
+    }
+  }
+
+  @Test
+  func testNewCatalogClearsAFocusedAppThatWasRemoved() async {
+    let app = TestFixtures.app(
+      backgroundImageURL: TestFixtures.backgroundImageURL
+    )
+    let replacement = TestFixtures.app(id: "replacement")
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [app]
+    state.apps = [app]
+    state.focusedAppID = app.id
+    state.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setApps([replacement])) {
+      $0.sourceApps = [replacement]
+      $0.apps = [replacement]
+      $0.dataSessionID = 1
+      $0.focusedAppID = nil
+      $0.focusedBackgroundImageURL = nil
+    }
+  }
+
+  @Test
+  func testNewCatalogKeepsFocusForTheSameStableAppID() async {
+    let app = TestFixtures.app()
+    let updatedApp = TestFixtures.app(
+      backgroundImageURL: TestFixtures.backgroundImageURL
+    )
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [app]
+    state.apps = [app]
+    state.focusedAppID = app.id
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setApps([updatedApp])) {
+      $0.sourceApps = [updatedApp]
+      $0.apps = [updatedApp]
+      $0.dataSessionID = 1
+      $0.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
+    }
+  }
+
+  @Test
+  func testNewCatalogClearsArtworkRemovedFromTheFocusedApp() async {
+    let app = TestFixtures.app(
+      backgroundImageURL: TestFixtures.backgroundImageURL
+    )
+    let updatedApp = TestFixtures.app()
+    var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
+    state.sourceApps = [app]
+    state.apps = [app]
+    state.focusedAppID = app.id
+    state.focusedBackgroundImageURL = TestFixtures.backgroundImageURL
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(.setApps([updatedApp])) {
+      $0.sourceApps = [updatedApp]
+      $0.apps = [updatedApp]
+      $0.dataSessionID = 1
+      $0.focusedBackgroundImageURL = nil
+    }
+  }
+
+  @Test
   func testDeepLinkSuccessDoesNotOpenAppStore() async {
     let recorder = OpenRecorder(results: [true])
     let store = makeStore(
@@ -67,6 +240,18 @@ struct MoreAppsFeatureTests {
         .init(id: 1, event: .selected(appID: "sample"))
       ]
     }
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    })
     await store.receive({ action in
       guard
         case .openFinished(
@@ -141,6 +326,7 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
+      $0.openingAppIDs = ["sample"]
       $0.presentingAppID = "sample"
       $0.nextEventID = 1
       $0.pendingEvents = [
@@ -159,6 +345,7 @@ struct MoreAppsFeatureTests {
       }
       return true
     }) {
+      $0.openingAppIDs = []
       $0.presentingAppID = nil
       $0.nextEventID = 2
       $0.pendingEvents.append(
@@ -184,6 +371,7 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
+      $0.openingAppIDs = ["sample"]
       $0.presentingAppID = "sample"
       $0.nextEventID = 1
       $0.pendingEvents = [
@@ -202,6 +390,7 @@ struct MoreAppsFeatureTests {
       }
       return true
     }) {
+      $0.openingAppIDs = []
       $0.presentingAppID = nil
       $0.nextEventID = 2
       $0.pendingEvents.append(
@@ -218,18 +407,35 @@ struct MoreAppsFeatureTests {
     let openRecorder = OpenRecorder(results: [false])
     let presentationRecorder = PresentationRecorder(outcomes: [.dismissed])
     let store = makePlatformStore(
-      app: TestFixtures.app(),
+      app: TestFixtures.app(
+        backgroundImageURL: TestFixtures.backgroundImageURL
+      ),
       platform: .iOS,
       openRecorder: openRecorder,
       presentationRecorder: presentationRecorder
     )
 
     await store.send(.selected(appID: "sample")) {
+      $0.openingAppIDs = ["sample"]
       $0.presentingAppID = "sample"
       $0.nextEventID = 1
       $0.pendingEvents = [
         .init(id: 1, event: .selected(appID: "sample"))
       ]
+    }
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .presentation
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
     }
     await store.receive({ action in
       guard
@@ -250,6 +456,10 @@ struct MoreAppsFeatureTests {
     #expect(presentationRecorder.requests.count == 1)
     #expect(
       presentationRecorder.requests.first?.appStoreIdentifier == "100"
+    )
+    #expect(
+      presentationRecorder.requests.first?.destination.backgroundImageURL
+        == TestFixtures.backgroundImageURL
     )
   }
 
@@ -291,11 +501,9 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testTVOSExplicitActionOpensInstalledAppBeforeAppStore() async {
+  func testTVOSPlatformPresentationImmediatelyOpensInstalledApp() async {
     let openRecorder = OpenRecorder(results: [true])
-    let presentationRecorder = PresentationRecorder(
-      outcomes: [.appStoreRequested]
-    )
+    let presentationRecorder = PresentationRecorder(outcomes: [])
     let store = makePlatformStore(
       app: TestFixtures.app(platforms: [.tvOS]),
       platform: .tvOS,
@@ -304,26 +512,11 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
-      $0.presentingAppID = "sample"
+      $0.openingAppIDs = ["sample"]
       $0.nextEventID = 1
       $0.pendingEvents = [
         .init(id: 1, event: .selected(appID: "sample"))
       ]
-    }
-    await store.receive({ action in
-      guard
-        case .presentationFinished(
-          dataSessionID: 0,
-          appID: "sample",
-          outcome: .appStoreRequested
-        ) = action
-      else {
-        return false
-      }
-      return true
-    }) {
-      $0.presentingAppID = nil
-      $0.openingAppIDs = ["sample"]
     }
     await store.receive({ action in
       guard
@@ -345,18 +538,13 @@ struct MoreAppsFeatureTests {
     }
 
     #expect(openRecorder.openedURLs == [TestFixtures.deepLinkURL])
-    #expect(presentationRecorder.requests.count == 1)
-    #expect(
-      presentationRecorder.requests.first?.appStoreIdentifier == "200"
-    )
+    #expect(presentationRecorder.requests.isEmpty)
   }
 
   @Test
-  func testTVOSExplicitActionFallsBackToAppStore() async {
+  func testTVOSPlatformPresentationImmediatelyFallsBackToAppStore() async {
     let openRecorder = OpenRecorder(results: [false, true])
-    let presentationRecorder = PresentationRecorder(
-      outcomes: [.appStoreRequested]
-    )
+    let presentationRecorder = PresentationRecorder(outcomes: [])
     let store = makePlatformStore(
       app: TestFixtures.app(platforms: [.tvOS]),
       platform: .tvOS,
@@ -365,7 +553,7 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
-      $0.presentingAppID = "sample"
+      $0.openingAppIDs = ["sample"]
       $0.nextEventID = 1
       $0.pendingEvents = [
         .init(id: 1, event: .selected(appID: "sample"))
@@ -373,19 +561,16 @@ struct MoreAppsFeatureTests {
     }
     await store.receive({ action in
       guard
-        case .presentationFinished(
+        case .deepLinkFailed(
           dataSessionID: 0,
           appID: "sample",
-          outcome: .appStoreRequested
+          continuation: .appStore
         ) = action
       else {
         return false
       }
       return true
-    }) {
-      $0.presentingAppID = nil
-      $0.openingAppIDs = ["sample"]
-    }
+    })
     await store.receive({ action in
       guard
         case .openFinished(
@@ -409,15 +594,13 @@ struct MoreAppsFeatureTests {
       openRecorder.openedURLs
         == [TestFixtures.deepLinkURL, TestFixtures.tvOSStoreURL]
     )
-    #expect(presentationRecorder.requests.count == 1)
+    #expect(presentationRecorder.requests.isEmpty)
   }
 
   @Test
-  func testTVOSExplicitActionWithoutDeepLinkOpensAppStore() async {
+  func testTVOSPlatformPresentationWithoutDeepLinkOpensAppStore() async {
     let openRecorder = OpenRecorder(results: [true])
-    let presentationRecorder = PresentationRecorder(
-      outcomes: [.appStoreRequested]
-    )
+    let presentationRecorder = PresentationRecorder(outcomes: [])
     let store = makePlatformStore(
       app: TestFixtures.app(platforms: [.tvOS], deepLinkURL: nil),
       platform: .tvOS,
@@ -426,26 +609,11 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
-      $0.presentingAppID = "sample"
+      $0.openingAppIDs = ["sample"]
       $0.nextEventID = 1
       $0.pendingEvents = [
         .init(id: 1, event: .selected(appID: "sample"))
       ]
-    }
-    await store.receive({ action in
-      guard
-        case .presentationFinished(
-          dataSessionID: 0,
-          appID: "sample",
-          outcome: .appStoreRequested
-        ) = action
-      else {
-        return false
-      }
-      return true
-    }) {
-      $0.presentingAppID = nil
-      $0.openingAppIDs = ["sample"]
     }
     await store.receive({ action in
       guard
@@ -467,15 +635,13 @@ struct MoreAppsFeatureTests {
     }
 
     #expect(openRecorder.openedURLs == [TestFixtures.tvOSStoreURL])
-    #expect(presentationRecorder.requests.count == 1)
+    #expect(presentationRecorder.requests.isEmpty)
   }
 
   @Test
-  func testTVOSExplicitActionReportsFailureWhenNoDestinationOpens() async {
+  func testTVOSPlatformPresentationReportsFailureWhenNoDestinationOpens() async {
     let openRecorder = OpenRecorder(results: [false, false])
-    let presentationRecorder = PresentationRecorder(
-      outcomes: [.appStoreRequested]
-    )
+    let presentationRecorder = PresentationRecorder(outcomes: [])
     let store = makePlatformStore(
       app: TestFixtures.app(platforms: [.tvOS]),
       platform: .tvOS,
@@ -484,7 +650,7 @@ struct MoreAppsFeatureTests {
     )
 
     await store.send(.selected(appID: "sample")) {
-      $0.presentingAppID = "sample"
+      $0.openingAppIDs = ["sample"]
       $0.nextEventID = 1
       $0.pendingEvents = [
         .init(id: 1, event: .selected(appID: "sample"))
@@ -492,19 +658,16 @@ struct MoreAppsFeatureTests {
     }
     await store.receive({ action in
       guard
-        case .presentationFinished(
+        case .deepLinkFailed(
           dataSessionID: 0,
           appID: "sample",
-          outcome: .appStoreRequested
+          continuation: .appStore
         ) = action
       else {
         return false
       }
       return true
-    }) {
-      $0.presentingAppID = nil
-      $0.openingAppIDs = ["sample"]
-    }
+    })
     await store.receive({ action in
       guard
         case .openFinished(
@@ -528,7 +691,7 @@ struct MoreAppsFeatureTests {
       openRecorder.openedURLs
         == [TestFixtures.deepLinkURL, TestFixtures.tvOSStoreURL]
     )
-    #expect(presentationRecorder.requests.count == 1)
+    #expect(presentationRecorder.requests.isEmpty)
   }
 
   @Test
@@ -536,8 +699,8 @@ struct MoreAppsFeatureTests {
     let openRecorder = OpenRecorder(results: [])
     let presentationRecorder = PresentationRecorder(outcomes: [.dismissed])
     let store = makePlatformStore(
-      app: TestFixtures.app(platforms: [.tvOS]),
-      platform: .tvOS,
+      app: TestFixtures.app(deepLinkURL: nil),
+      platform: .iOS,
       openRecorder: openRecorder,
       presentationRecorder: presentationRecorder
     )
@@ -565,15 +728,18 @@ struct MoreAppsFeatureTests {
     }
 
     #expect(openRecorder.openedURLs.isEmpty)
+    #expect(presentationRecorder.requests.count == 1)
   }
 
   @Test
-  func testTVOSPresentationFailureDoesNotOpenAppStoreURL() async {
+  func testIOSAppStoreRequestOpensAppStoreURL() async {
     let openRecorder = OpenRecorder(results: [true])
-    let presentationRecorder = PresentationRecorder(outcomes: [.failed])
+    let presentationRecorder = PresentationRecorder(
+      outcomes: [.appStoreRequested]
+    )
     let store = makePlatformStore(
-      app: TestFixtures.app(platforms: [.tvOS]),
-      platform: .tvOS,
+      app: TestFixtures.app(deepLinkURL: nil),
+      platform: .iOS,
       openRecorder: openRecorder,
       presentationRecorder: presentationRecorder
     )
@@ -590,7 +756,7 @@ struct MoreAppsFeatureTests {
         case .presentationFinished(
           dataSessionID: 0,
           appID: "sample",
-          outcome: .failed
+          outcome: .appStoreRequested
         ) = action
       else {
         return false
@@ -598,13 +764,28 @@ struct MoreAppsFeatureTests {
       return true
     }) {
       $0.presentingAppID = nil
+      $0.openingAppIDs = ["sample"]
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 0,
+          appID: "sample",
+          outcome: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
       $0.nextEventID = 2
       $0.pendingEvents.append(
-        .init(id: 2, event: .failedToOpen(appID: "sample"))
+        .init(id: 2, event: .openedAppStore(appID: "sample"))
       )
     }
 
-    #expect(openRecorder.openedURLs.isEmpty)
+    #expect(openRecorder.openedURLs == [TestFixtures.iOSStoreURL])
     #expect(presentationRecorder.requests.count == 1)
   }
 
@@ -720,11 +901,11 @@ struct MoreAppsFeatureTests {
 
   @Test
   func testReplacingCatalogCancelsAnActivePlatformPresentation() async {
-    let oldApp = TestFixtures.app(platforms: [.tvOS])
+    let oldApp = TestFixtures.app(deepLinkURL: nil)
     let replacement = TestFixtures.app(
       id: "replacement",
       bundleIdentifier: "com.example.replacement",
-      platforms: [.tvOS]
+      deepLinkURL: nil
     )
     let presentationRecorder = DeferredPresentationRecorder()
     var state = MoreAppsFeature.State(
@@ -737,7 +918,7 @@ struct MoreAppsFeatureTests {
       MoreAppsFeature()
     } withDependencies: {
       $0.moreAppsEnvironment = .init(
-        platform: .tvOS,
+        platform: .iOS,
         bundleIdentifier: nil
       )
       $0.moreAppsPresentation = MoreAppsPresentationClient(
@@ -768,15 +949,13 @@ struct MoreAppsFeatureTests {
   @Test
   func testStalePresentationResultCannotOpenAReplacementDestination() async {
     let oldApp = TestFixtures.app(
-      platforms: [.tvOS],
       deepLinkURL: nil,
-      appStoreURL: TestFixtures.tvOSStoreURL
+      appStoreURL: TestFixtures.iOSStoreURL
     )
     let replacementStoreURL = URL(
       string: "https://apps.apple.com/app/id999"
     )!
     let replacement = TestFixtures.app(
-      platforms: [.tvOS],
       deepLinkURL: nil,
       appStoreURL: replacementStoreURL
     )
@@ -793,7 +972,7 @@ struct MoreAppsFeatureTests {
       MoreAppsFeature()
     } withDependencies: {
       $0.moreAppsEnvironment = .init(
-        platform: .tvOS,
+        platform: .iOS,
         bundleIdentifier: nil
       )
       $0.moreAppsOpen = MoreAppsOpenClient { url in
@@ -823,12 +1002,12 @@ struct MoreAppsFeatureTests {
     let firstApp = TestFixtures.app(
       id: "first",
       bundleIdentifier: "com.example.first",
-      platforms: [.tvOS]
+      deepLinkURL: nil
     )
     let secondApp = TestFixtures.app(
       id: "second",
       bundleIdentifier: "com.example.second",
-      platforms: [.tvOS]
+      deepLinkURL: nil
     )
     let presentationRecorder = DeferredPresentationRecorder()
     var state = MoreAppsFeature.State(
@@ -842,7 +1021,7 @@ struct MoreAppsFeatureTests {
       MoreAppsFeature()
     } withDependencies: {
       $0.moreAppsEnvironment = .init(
-        platform: .tvOS,
+        platform: .iOS,
         bundleIdentifier: nil
       )
       $0.moreAppsPresentation = MoreAppsPresentationClient(
@@ -879,13 +1058,13 @@ struct MoreAppsFeatureTests {
     let retainedApp = TestFixtures.app(
       id: "retained",
       bundleIdentifier: "com.example.retained",
-      platforms: [.tvOS],
+      deepLinkURL: nil,
       sortOrder: 0
     )
     let presentedApp = TestFixtures.app(
       id: "presented",
       bundleIdentifier: "com.example.presented",
-      platforms: [.tvOS],
+      deepLinkURL: nil,
       sortOrder: 1
     )
     let openRecorder = OpenRecorder(results: [true])
@@ -901,7 +1080,7 @@ struct MoreAppsFeatureTests {
       MoreAppsFeature()
     } withDependencies: {
       $0.moreAppsEnvironment = .init(
-        platform: .tvOS,
+        platform: .iOS,
         bundleIdentifier: nil
       )
       $0.moreAppsPresentation = MoreAppsPresentationClient(
@@ -1223,9 +1402,13 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testUnknownImpressionAndDuplicateSelectionAreIgnored() async {
+  func testUnknownImpressionAndSelectionsDuringOpenAreIgnored() async {
+    let otherApp = TestFixtures.app(
+      id: "other",
+      bundleIdentifier: "com.example.other"
+    )
     var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
-    state.apps = [TestFixtures.app()]
+    state.apps = [TestFixtures.app(), otherApp]
     state.openingAppIDs = ["sample"]
 
     let store = TestStore(initialState: state) {
@@ -1234,6 +1417,7 @@ struct MoreAppsFeatureTests {
 
     await store.send(.itemBecameVisible(appID: "missing"))
     await store.send(.selected(appID: "sample"))
+    await store.send(.selected(appID: otherApp.id))
     await store.send(.selected(appID: "missing"))
   }
 
@@ -1269,6 +1453,18 @@ struct MoreAppsFeatureTests {
         .init(id: 1, event: .selected(appID: "sample"))
       ]
     }
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: "sample",
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    })
     await store.receive({ action in
       guard
         case .openFinished(
@@ -1422,7 +1618,6 @@ struct MoreAppsFeatureTests {
     await store.send(.setApps([replacement])) {
       $0.sourceApps = [replacement]
       $0.apps = [replacement]
-      $0.openingAppIDs = []
       $0.dataSessionID = 1
     }
     await store.send(
@@ -1431,7 +1626,9 @@ struct MoreAppsFeatureTests {
         appID: oldApp.id,
         outcome: .app
       )
-    )
+    ) {
+      $0.openingAppIDs = []
+    }
     await store.send(.selected(appID: replacement.id)) {
       $0.openingAppIDs = [replacement.id]
       $0.nextEventID = 1
@@ -1460,7 +1657,7 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
-  func testReplacingCatalogPreventsStaleAppStoreFallback() async {
+  func testReplacingCatalogKeepsExternalOpenSerialized() async {
     let oldApp = TestFixtures.app()
     let replacement = TestFixtures.app(
       id: "replacement",
@@ -1498,12 +1695,122 @@ struct MoreAppsFeatureTests {
     await store.send(.setApps([replacement])) {
       $0.sourceApps = [replacement]
       $0.apps = [replacement]
-      $0.openingAppIDs = []
       $0.dataSessionID = 1
     }
+    await store.send(.selected(appID: replacement.id))
 
     recorder.finishFirstOpen(with: false)
-    await store.finish()
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: oldApp.id,
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+    }
+
+    #expect(recorder.openedURLs == [TestFixtures.deepLinkURL])
+
+    await store.send(.selected(appID: replacement.id)) {
+      $0.openingAppIDs = [replacement.id]
+      $0.nextEventID = 2
+      $0.pendingEvents.append(
+        .init(id: 2, event: .selected(appID: replacement.id))
+      )
+    }
+    await store.receive({ action in
+      guard
+        case .openFinished(
+          dataSessionID: 1,
+          appID: replacement.id,
+          outcome: .app
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+      $0.nextEventID = 3
+      $0.pendingEvents.append(
+        .init(id: 3, event: .openedApp(appID: replacement.id))
+      )
+    }
+
+    #expect(
+      recorder.openedURLs
+        == [TestFixtures.deepLinkURL, TestFixtures.deepLinkURL]
+    )
+  }
+
+  @Test
+  func testLoadedCatalogKeepsExternalOpenSerialized() async {
+    let oldApp = TestFixtures.app()
+    let replacement = TestFixtures.app(
+      id: "replacement",
+      bundleIdentifier: "com.example.new"
+    )
+    var state = MoreAppsFeature.State(
+      maximumNumberOfItems: nil,
+      allowedCustomDeepLinkSchemes: ["sample"]
+    )
+    state.sourceApps = [oldApp]
+    state.apps = [oldApp]
+    state.isLoading = true
+    state.activeLoadID = 1
+    let recorder = DeferredOpenRecorder()
+
+    let store = TestStore(initialState: state) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+      $0.moreAppsOpen = MoreAppsOpenClient { url in
+        await recorder.open(url)
+      }
+    }
+
+    await store.send(.selected(appID: oldApp.id)) {
+      $0.openingAppIDs = [oldApp.id]
+      $0.nextEventID = 1
+      $0.pendingEvents = [
+        .init(id: 1, event: .selected(appID: oldApp.id))
+      ]
+    }
+    await recorder.waitUntilFirstOpenStarts()
+
+    await store.send(.loadSucceeded(id: 1, apps: [replacement])) {
+      $0.sourceApps = [replacement]
+      $0.apps = [replacement]
+      $0.isLoading = false
+      $0.activeLoadID = nil
+      $0.dataSessionID = 1
+    }
+    await store.send(.selected(appID: replacement.id))
+
+    recorder.finishFirstOpen(with: false)
+    await store.receive({ action in
+      guard
+        case .deepLinkFailed(
+          dataSessionID: 0,
+          appID: oldApp.id,
+          continuation: .appStore
+        ) = action
+      else {
+        return false
+      }
+      return true
+    }) {
+      $0.openingAppIDs = []
+    }
 
     #expect(recorder.openedURLs == [TestFixtures.deepLinkURL])
   }

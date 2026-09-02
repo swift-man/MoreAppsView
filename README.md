@@ -88,7 +88,14 @@ let apps = [
         appStoreURL: URL(
           string: "https://apps.apple.com/us/app/andromeda-17k-clock-wallpaper/id6786789129"
         )!,
-        deepLinkURL: URL(string: "andromeda17k://")
+        deepLinkURL: URL(string: "andromeda17k://"),
+        backgroundImageURL: URL(
+          string: "https://is1-ssl.mzstatic.com/image/thumb/"
+            + "PurpleSource221/v4/f2/47/f8/"
+            + "f247f87c-b756-f833-1307-aee7f81f65db/"
+            + "Simulator_Screenshot_-_Apple_TV_4K__U00283rd_generation_U0029_-_"
+            + "2026-07-29_at_15.54.24.png/1920x1080bb.png"
+        )
       )
     ],
     sortOrder: 20
@@ -169,34 +176,67 @@ Motion is enabled.
 
 ```swift
 final class TVAppsViewController: UIViewController {
+  private let focusedBackgroundView = MoreAppsFocusedBackgroundView()
+
   private lazy var moreAppsView = MoreAppsView(
     configuration: .init(
       title: "More Apps on Apple TV",
       cardSpacing: 28,
       allowedCustomDeepLinkSchemes: ["andromeda17k"],
-      selectionBehavior: .platformPresentation
-    ),
-    presentingViewController: self
+      selectionBehavior: .directOpen
+    )
   )
 
   override func viewDidLoad() {
     super.viewDidLoad()
+
+    focusedBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+    moreAppsView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(focusedBackgroundView)
+    view.addSubview(moreAppsView)
+    moreAppsView.focusedBackgroundView = focusedBackgroundView
+
+    NSLayoutConstraint.activate([
+      focusedBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+      focusedBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      focusedBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      focusedBackgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      moreAppsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      moreAppsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      moreAppsView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+    ])
+
     moreAppsView.setApps(sharedCatalog)
   }
 }
 ```
 
-Selecting a card presents MoreAppsKit's focus-aware, full-screen app preview. It
-contains the app icon, name, subtitle, an explicit **Open App or View on the App
-Store** action, and a close action. The explicit action first tries the validated
-deep link. If the system accepts it, the installed app opens; otherwise the
-validated App Store URL is handed to the system App Store app. Selecting a card
-alone never leaves the host app, and Remote Back or Close dismisses the preview.
+When the focused destination has a `backgroundImageURL`, the host-owned
+`MoreAppsFocusedBackgroundView` requests artwork with a maximum decoded dimension
+of 1,920 pixels by default, applies a dark legibility overlay, and crossfades it
+behind the cards. Focus changes cancel stale work and keep the current image visible
+until its replacement succeeds; a load failure or destination without artwork clears
+the previous image. A successful `setApps` or provider reload starts a new data
+session, so the same focused artwork is retried after a transient failure. Hosts can
+observe non-cancellation failures with `onImageLoadingFailure`; MoreAppsKit does not
+log or transmit those errors. Reduce Motion disables the crossfade. The sample
+catalog uses Andromeda 17K's first App Store tvOS
+screenshot; for production catalogs, hosting approved artwork on a URL you control
+avoids depending on a storefront asset URL remaining stable.
+Each background-view instance has exclusive ownership: assign it to only one live
+`MoreAppsView` at a time. A new owner retries its first request even when the prior
+owner used the same app, artwork URL, and catalog revision.
 
-tvOS does not provide `SKOverlay` or an in-app App Store product controller, so
-an App Store product page cannot be embedded inside the host app. The full-screen
-preview belongs to MoreAppsKit; the final App Store URL handoff leaves it for the
-system App Store experience.
+Selecting a card immediately tries the validated deep link. If the system accepts
+it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
+URL to the system App Store app. No intermediate popup or package-owned preview is
+presented. Additional selections are ignored until that URL handoff completes, so
+multiple external destinations cannot race. tvOS does not provide `SKOverlay` or an
+in-app App Store product controller, so the final App Store experience always belongs
+to the system.
+Replacing the catalog does not unlock an already-started system URL handoff. Its
+completion releases the selection lock, while an obsolete deep-link failure cannot
+continue to the previous catalog's App Store fallback.
 
 See [Samples/tvOS/MoreAppsExampleViewController.swift](Samples/tvOS/MoreAppsExampleViewController.swift)
 for a complete example.
@@ -229,7 +269,9 @@ Call `await moreAppsView.reload()` to fetch again with the most recently supplie
 provider. Starting another provider load cancels the prior TCA effect so a stale
 response cannot replace newer state.
 
-The JSON schema is demonstrated in
+The optional `backgroundImageURL` belongs to each platform destination. The built-in
+focus-background synchronization reads it from the matching tvOS destination, and
+older catalogs that omit it continue to decode. The JSON schema is demonstrated in
 [Samples/RemoteJSON/more-apps.json](Samples/RemoteJSON/more-apps.json).
 An unknown platform string fails decoding instead of accidentally exposing an app
 on the wrong platform.
@@ -253,9 +295,8 @@ when the filtered result is empty.
 `MoreAppsConfiguration.selectionBehavior` supports two policies:
 
 - `.directOpen` preserves the original behavior and remains the default.
-- `.platformPresentation` uses an iOS StoreKit overlay or a tvOS full-screen app
-  preview. Supply a presenting view controller or a custom
-  `MoreAppsPresenting` implementation when selecting this policy.
+- `.platformPresentation` uses an iOS StoreKit overlay. On tvOS it intentionally
+  matches `.directOpen`, so no presenter or presenting view controller is needed.
 
 In direct-open mode, the TCA reducer:
 
@@ -276,12 +317,9 @@ are rejected. Add only the target apps' trusted scheme names to
 
 In platform-presentation mode, iOS tries the same validated deep link first. A
 failed or missing deep link presents `SKOverlay` using the numeric identifier in
-the validated App Store URL. tvOS does not open a destination on card selection;
-it waits for the explicit action in the full-screen preview, then tries the
-validated deep link before falling back to the validated App Store URL. A
-StoreKit or presentation failure on iOS safely falls back to the App Store URL.
-On tvOS, dismissing the preview or failing to present it performs no URL handoff;
-a presentation failure emits `failedToOpen` without opening the App Store.
+the validated App Store URL, and a presentation failure safely falls back to the
+App Store URL. tvOS bypasses the presentation dependency and follows the direct
+deep-link-first, App-Store-fallback flow immediately.
 
 A custom `MoreAppsPresenting` implementation keeps `present(_:)` suspended until
 its UI lifecycle ends. It dismisses that UI and returns `.dismissed` when its task
@@ -324,9 +362,9 @@ MoreAppsSwiftUIView(
 )
 ```
 
-The wrapper accepts an optional `MoreAppsPresenting` implementation when a
-SwiftUI host opts into platform presentation. Direct-open behavior requires no
-presenter.
+The wrapper accepts an optional `MoreAppsPresenting` implementation when an iOS
+SwiftUI host opts into platform presentation. tvOS and direct-open behavior do
+not require a presenter.
 
 ## Public API overview
 
@@ -334,18 +372,24 @@ presenter.
 - `MoreAppsFilter`: explicit pure filtering for custom catalog pipelines and tests.
 - `MoreAppsProviding`, `StaticMoreAppsProvider`, `RemoteJSONMoreAppsProvider`: catalog sources.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
-- `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable StoreKit and tvOS
-  full-screen preview presentation without expanding the URL opener's
-  responsibility.
-- `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in platform UI.
+- `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable iOS StoreKit
+  presentation without expanding the URL opener's responsibility.
+- `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in iOS StoreKit UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
-  background decoding, and memory caching.
-- `MoreAppsView`: UIKit entry point with `setApps`, `load`, `reload`, and `onEvent`.
+  size-aware background decoding, and memory caching.
+- `MoreAppsFocusedBackgroundView`: optional host-owned full-screen focus artwork.
+- `MoreAppsView`: UIKit entry point with `setApps`, `load`, `reload`, `onEvent`, and
+  focus-background synchronization.
 - `MoreAppsSwiftUIView`: SwiftUI adapter around `MoreAppsView`.
 
 Every public declaration includes DocC documentation in source. Internal reducers,
 cells, event envelopes, and caches remain implementation details.
+
+Remote artwork responses are limited to 8 MiB. Requested decoded dimensions are
+clamped to 4,096 pixels, and the decoded memory cache has a 32 MiB total budget.
+Images whose actual decoded bitmap cost exceeds that budget are returned to the
+caller but are not cached.
 
 ## Architecture and file roles
 
@@ -354,7 +398,7 @@ cells, event envelopes, and caches remain implementation details.
 | `Models` | Codable metadata, platform destinations, events, pure filtering |
 | `Data` | Provider protocol/client, static provider, Alamofire remote provider |
 | `Navigation` | URL-opening protocol, live `UIApplication` implementation, dependency key |
-| `Presentation` | StoreKit overlay, tvOS full-screen preview, presenter dependency key |
+| `Presentation` | iOS StoreKit overlay and presenter dependency key |
 | `Feature` | TCA state, actions, effects, host environment dependency |
 | `ImageLoading` | Alamofire image bytes, MIME checks, in-flight sharing, memory caches |
 | `UI` | Configuration, reusable card cell, diffable UIKit view, SwiftUI wrapper |
