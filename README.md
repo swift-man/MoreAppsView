@@ -399,14 +399,16 @@ not require a presenter.
 
 - `MoreApp`, `MoreAppDestination`, `MoreAppsPlatform`: Codable, hashable, sendable models.
 - `MoreAppsFilter`: explicit pure filtering for custom catalog pipelines and tests.
-- `MoreAppsProviding`, `StaticMoreAppsProvider`, `RemoteJSONMoreAppsProvider`: catalog sources.
+- `MoreAppsProviding`, `StaticMoreAppsProvider`: core catalog sources.
+- `RemoteJSONMoreAppsProvider`: Alamofire-backed catalog source in
+  `MoreAppsKitNetworking`.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
 - `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable iOS StoreKit
   presentation without expanding the URL opener's responsibility.
 - `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in iOS StoreKit UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
-  size-aware background decoding, and memory caching.
+  size-aware background decoding, and memory caching in `MoreAppsKitNetworking`.
 - `MoreAppsImageLoading`: the core image-loading boundary used by UIKit and
   SwiftUI views without coupling them to Alamofire.
 - `MoreAppsKitNetworking`: the optional Alamofire-backed product containing remote
