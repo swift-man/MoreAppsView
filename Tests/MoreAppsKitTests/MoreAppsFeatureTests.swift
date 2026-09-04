@@ -1228,6 +1228,37 @@ struct MoreAppsFeatureTests {
   }
 
   @Test
+  func testCancellingActiveProviderLoadDoesNotEmitFailureEvent() async {
+    let store = TestStore(
+      initialState: MoreAppsFeature.State(maximumNumberOfItems: nil)
+    ) {
+      MoreAppsFeature()
+    } withDependencies: {
+      $0.moreAppsEnvironment = .init(
+        platform: .iOS,
+        bundleIdentifier: nil
+      )
+    }
+
+    await store.send(
+      .load(.init {
+        try await Task.sleep(nanoseconds: 60_000_000_000)
+        return []
+      })
+    ) {
+      $0.isLoading = true
+      $0.nextLoadID = 1
+      $0.activeLoadID = 1
+    }
+    await store.send(.setApps([])) {
+      $0.isLoading = false
+      $0.activeLoadID = nil
+      $0.dataSessionID = 1
+    }
+    await store.finish()
+  }
+
+  @Test
   func testStaleProviderResponseCannotReplaceCurrentState() async {
     let currentApp = TestFixtures.app(id: "current")
     var state = MoreAppsFeature.State(maximumNumberOfItems: nil)
