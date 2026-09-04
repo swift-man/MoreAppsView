@@ -44,6 +44,7 @@
     public final class Coordinator {
       fileprivate var apps: [MoreApp] = []
       fileprivate var configuration: MoreAppsConfiguration?
+      fileprivate var imageLoader: (any MoreAppsImageLoading)?
       fileprivate let presentationRelay = MoreAppsPresentationRelay()
 
       /// Creates an empty wrapper coordinator.
@@ -68,6 +69,7 @@
       view.setApps(apps)
       context.coordinator.apps = apps
       context.coordinator.configuration = configuration
+      context.coordinator.imageLoader = imageLoader
       return view
     }
 
@@ -78,6 +80,11 @@
     ) {
       uiView.onEvent = onEvent
       context.coordinator.presentationRelay.presenter = presenter
+
+      if context.coordinator.imageLoader !== imageLoader {
+        context.coordinator.imageLoader = imageLoader
+        uiView.update(imageLoader: imageLoader)
+      }
 
       if context.coordinator.configuration != configuration {
         context.coordinator.configuration = configuration

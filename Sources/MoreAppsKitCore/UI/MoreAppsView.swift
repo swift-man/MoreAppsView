@@ -50,7 +50,7 @@ public final class MoreAppsView: UIView {
   }
 
   private var configuration: MoreAppsConfiguration
-  private let imageLoader: any MoreAppsImageLoading
+  private var imageLoader: any MoreAppsImageLoading
   private let flowLayout: UICollectionViewFlowLayout
   private let collectionView: UICollectionView
   private let titleLabel = UILabel()
@@ -184,6 +184,12 @@ public final class MoreAppsView: UIView {
   public func reload() async {
     guard let provider else { return }
     await store.send(.load(provider)).finish()
+  }
+
+  func update(imageLoader newImageLoader: any MoreAppsImageLoading) {
+    guard imageLoader !== newImageLoader else { return }
+    imageLoader = newImageLoader
+    reconfigureCurrentItems()
   }
 
   func update(configuration newConfiguration: MoreAppsConfiguration) {
