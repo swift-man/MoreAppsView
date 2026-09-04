@@ -158,6 +158,10 @@ struct MoreAppsFeature: Reducer {
               )
             )
           } catch {
+            // URLSession and third-party clients may surface cancellation as a
+            // regular error (for example, URLError.cancelled). Do not turn a
+            // cancelled load into a user-visible failure event.
+            guard !Task.isCancelled else { return }
             await send(
               .loadFailed(
                 id: loadID,
