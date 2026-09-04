@@ -91,6 +91,18 @@ let package = Package(
         ),
       ]
     ),
+    .testTarget(
+      name: "MoreAppsKitCoreImportTests",
+      dependencies: [
+        "MoreAppsKitCore"
+      ]
+    ),
+    .testTarget(
+      name: "MoreAppsKitNetworkingImportTests",
+      dependencies: [
+        "MoreAppsNetworking"
+      ]
+    ),
   ],
   swiftLanguageVersions: [.v5]
 )
