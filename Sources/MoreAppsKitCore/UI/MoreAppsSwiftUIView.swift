@@ -16,6 +16,7 @@
     private let configuration: MoreAppsConfiguration
     private let presenter: (any MoreAppsPresenting)?
     private let onEvent: ((MoreAppsEvent) -> Void)?
+    private let imageLoader: any MoreAppsImageLoading
 
     /// Creates a SwiftUI More Apps view backed by `UICollectionView`.
     ///
@@ -28,12 +29,14 @@
       apps: [MoreApp],
       configuration: MoreAppsConfiguration = .default,
       presenter: (any MoreAppsPresenting)? = nil,
-      onEvent: ((MoreAppsEvent) -> Void)? = nil
+      onEvent: ((MoreAppsEvent) -> Void)? = nil,
+      imageLoader: any MoreAppsImageLoading
     ) {
       self.apps = apps
       self.configuration = configuration
       self.presenter = presenter
       self.onEvent = onEvent
+      self.imageLoader = imageLoader
     }
 
     /// State retained across SwiftUI updates to avoid resetting impressions.
@@ -59,7 +62,7 @@
         configuration: configuration,
         opener: DefaultMoreAppsOpener.shared,
         presenter: context.coordinator.presentationRelay,
-        imageLoader: .shared
+        imageLoader: imageLoader
       )
       view.onEvent = onEvent
       view.setApps(apps)

@@ -9,6 +9,7 @@
 import Alamofire
 import Foundation
 import ImageIO
+import MoreAppsKitCore
 import UIKit
 
 private let moreAppsDefaultMaximumDecodedPixelSize = 512
@@ -416,7 +417,7 @@ private final class MoreAppsImageStreamReceiver: @unchecked Sendable {
 /// budget, and an image whose actual decoded bitmap cost exceeds that budget is
 /// returned without being cached.
 @MainActor
-public final class MoreAppsImageLoader {
+public final class MoreAppsImageLoader: MoreAppsImageLoading {
   private struct ImageRequestKey: Hashable, Sendable {
     let url: URL
     let maximumPixelSize: Int

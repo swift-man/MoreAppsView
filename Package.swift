@@ -21,7 +21,15 @@ let package = Package(
     .library(
       name: "MoreAppsKit",
       targets: ["MoreAppsKit"]
-    )
+    ),
+    .library(
+      name: "MoreAppsKitCore",
+      targets: ["MoreAppsKitCore"]
+    ),
+    .library(
+      name: "MoreAppsKitNetworking",
+      targets: ["MoreAppsNetworking"]
+    ),
   ],
   dependencies: [
     .package(
@@ -39,7 +47,7 @@ let package = Package(
   ],
   targets: [
     .target(
-      name: "MoreAppsKit",
+      name: "MoreAppsKitCore",
       dependencies: [
         .product(
           name: "ComposableArchitecture",
@@ -49,19 +57,34 @@ let package = Package(
           name: "Dependencies",
           package: "swift-dependencies"
         ),
+      ],
+      resources: [
+        .process("Resources")
+      ]
+    ),
+    .target(
+      name: "MoreAppsNetworking",
+      dependencies: [
+        "MoreAppsKitCore",
         .product(
           name: "Alamofire",
           package: "Alamofire"
         ),
-      ],
-      resources: [
-        .process("Resources")
+      ]
+    ),
+    .target(
+      name: "MoreAppsKit",
+      dependencies: [
+        "MoreAppsKitCore",
+        "MoreAppsNetworking",
       ]
     ),
     .testTarget(
       name: "MoreAppsKitTests",
       dependencies: [
         "MoreAppsKit",
+        "MoreAppsKitCore",
+        "MoreAppsNetworking",
         .product(
           name: "ComposableArchitecture",
           package: "swift-composable-architecture"

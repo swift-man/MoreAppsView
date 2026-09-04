@@ -64,7 +64,7 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
   )
   public convenience init(
     presentingViewController: UIViewController,
-    imageLoader: MoreAppsImageLoader
+    imageLoader: any MoreAppsImageLoading
   ) {
     _ = imageLoader
     self.init(presentingViewController: presentingViewController)

@@ -9,6 +9,7 @@
 import Testing
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 struct MoreAppsConfigurationTests {
   @Test

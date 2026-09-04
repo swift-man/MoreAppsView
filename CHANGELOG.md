@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.2] - 2026-09-05
+
+### Added
+
+- Add `MoreAppsKitCore` and `MoreAppsKitNetworking` products so Alamofire-backed
+  catalog and artwork loading can be adopted independently from the core UI.
+- Add the `MoreAppsImageLoading` protocol for core-only hosts and keep the
+  existing `MoreAppsKit` product as a source-compatible umbrella.
+
+### Changed
+
+- Move the Alamofire remote JSON provider and image loader into the networking
+  target while preserving the original `MoreAppsKit` default initializers.
+- Document the product split and explicit image-loader injection path.
+
 ## [0.2.1] - 2026-09-02
 
 ### Added

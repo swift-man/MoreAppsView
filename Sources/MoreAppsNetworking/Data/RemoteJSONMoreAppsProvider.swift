@@ -8,6 +8,7 @@
 
 import Alamofire
 import Foundation
+import MoreAppsKitCore
 
 private actor RemoteJSONMoreAppsRepository {
   static let defaultMaximumResponseByteCount = 1 * 1_024 * 1_024

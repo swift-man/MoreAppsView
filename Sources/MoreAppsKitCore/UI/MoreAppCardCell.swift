@@ -130,7 +130,7 @@ final class MoreAppCardCell: UICollectionViewCell {
   func configure(
     with app: MoreApp,
     configuration: MoreAppsConfiguration,
-    imageLoader: MoreAppsImageLoader
+    imageLoader: any MoreAppsImageLoading
   ) {
     representedAppID = app.id
     imageTask?.cancel()

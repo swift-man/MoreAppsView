@@ -6,10 +6,12 @@
 //  Copyright © 2026 MoreAppsKit. All rights reserved.
 //
 
+import MoreAppsNetworking
 import Testing
 import UIKit
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 @MainActor
 @Suite(.serialized)
@@ -350,7 +352,7 @@ struct MoreAppsViewTests {
     cell.configure(
       with: TestFixtures.app(),
       configuration: .default,
-      imageLoader: .shared
+      imageLoader: MoreAppsImageLoader.shared
     )
 
     #expect(cell.isAccessibilityElement)
@@ -366,7 +368,7 @@ struct MoreAppsViewTests {
     cell.configure(
       with: TestFixtures.app(),
       configuration: .init(selectionBehavior: .platformPresentation),
-      imageLoader: .shared
+      imageLoader: MoreAppsImageLoader.shared
     )
 
     #if os(iOS)

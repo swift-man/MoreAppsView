@@ -12,6 +12,7 @@ import Testing
 #endif
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 @MainActor
 @Suite
