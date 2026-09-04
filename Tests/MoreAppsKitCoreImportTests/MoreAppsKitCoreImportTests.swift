@@ -15,6 +15,6 @@ struct MoreAppsKitCoreImportTests {
   func coreProductImportsIndependently() {
     let configuration = MoreAppsConfiguration.default
 
-    #expect((configuration.maximumNumberOfItems ?? 0) > 0)
+    #expect(configuration.maximumNumberOfItems == nil)
   }
 }

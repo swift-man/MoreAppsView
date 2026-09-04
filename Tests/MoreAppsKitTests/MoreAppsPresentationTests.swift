@@ -54,10 +54,10 @@ struct MoreAppsPresentationTests {
       let secondRequestWasAccepted = state.requestDismissal()
       let dismissingOverlapOutcome = state.overlappingPresentationOutcome
 
-      #expect(activeOverlapOutcome == .dismissed)
+      #expect(activeOverlapOutcome == .failed)
       #expect(firstRequestWasAccepted)
       #expect(!secondRequestWasAccepted)
-      #expect(dismissingOverlapOutcome == .dismissed)
+      #expect(dismissingOverlapOutcome == .failed)
     }
 
     @Test

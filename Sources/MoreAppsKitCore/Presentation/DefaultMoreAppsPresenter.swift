@@ -265,7 +265,10 @@ public final class DefaultMoreAppsPresenter: NSObject, MoreAppsPresenting {
     }
 
     var overlappingPresentationOutcome: MoreAppsPresentationOutcome {
-      .dismissed
+      // A new selection must continue to the validated App Store URL instead
+      // of being silently treated as a user dismissal while the old overlay
+      // is finishing its dismissal transition.
+      .failed
     }
 
     mutating func beginPresentation() {
