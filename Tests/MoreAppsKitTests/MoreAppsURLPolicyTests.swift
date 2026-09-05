@@ -163,6 +163,8 @@ struct MoreAppsURLPolicyTests {
       "https://apps.apple.com/app/id000",
       "https://apps.apple.com/app/id%31%32%33",
       "https://apps.apple.com/app/id100/id200",
+      "https://apps.apple.com/app/id123/id456789",
+      "https://apps.apple.com/app/id１２３",
     ]
   )
   func testInvalidAppStoreIdentifiersAreRejected(urlString: String) {

@@ -53,24 +53,28 @@ enum MoreAppsURLPolicy {
     }
 
     let identifiers = components.percentEncodedPath.split(separator: "/")
-      .compactMap { component -> String? in
-        guard component.hasPrefix("id") else { return nil }
-
-        let identifier = component.dropFirst(2)
-        guard !identifier.isEmpty,
-          identifier.utf8.allSatisfy({ (48...57).contains($0) }),
-          identifier.utf8.contains(where: { $0 != 48 })
-        else {
-          return nil
-        }
-
-        return String(identifier)
-      }
+      .compactMap(appStoreIdentifier(in:))
 
     guard identifiers.count == 1 else {
       return nil
     }
 
-    return identifiers[0]
+    return identifiers.first
+  }
+
+  private static func appStoreIdentifier(in component: Substring) -> String? {
+    guard component.hasPrefix("id") else { return nil }
+
+    let identifier = component.dropFirst(2)
+    let zero = UInt8(ascii: "0")
+    let digits = zero...UInt8(ascii: "9")
+    guard !identifier.isEmpty,
+      identifier.utf8.allSatisfy(digits.contains),
+      identifier.utf8.contains(where: { $0 != zero })
+    else {
+      return nil
+    }
+
+    return String(identifier)
   }
 }
