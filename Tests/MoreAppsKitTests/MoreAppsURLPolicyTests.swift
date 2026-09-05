@@ -10,6 +10,7 @@ import Foundation
 import Testing
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 @Suite
 struct MoreAppsURLPolicyTests {

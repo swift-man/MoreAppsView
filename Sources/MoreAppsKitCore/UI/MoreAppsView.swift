@@ -50,7 +50,7 @@ public final class MoreAppsView: UIView {
   }
 
   private var configuration: MoreAppsConfiguration
-  private let imageLoader: MoreAppsImageLoader
+  private var imageLoader: any MoreAppsImageLoading
   private let flowLayout: UICollectionViewFlowLayout
   private let collectionView: UICollectionView
   private let titleLabel = UILabel()
@@ -69,45 +69,6 @@ public final class MoreAppsView: UIView {
   private var collectionTopToTitleConstraint: NSLayoutConstraint!
   private var collectionTopConstraint: NSLayoutConstraint!
 
-  /// Creates a More Apps view using live host and URL-opening dependencies.
-  ///
-  /// - Parameter configuration: Visual and behavioral options for the view.
-  public convenience init(
-    configuration: MoreAppsConfiguration = .default
-  ) {
-    self.init(
-      configuration: configuration,
-      opener: DefaultMoreAppsOpener.shared,
-      presenter: nil,
-      imageLoader: .shared
-    )
-  }
-
-  /// Creates a More Apps view with the package's platform presenter.
-  ///
-  /// Use this initializer with ``MoreAppsSelectionBehavior/platformPresentation``
-  /// to present an App Store overlay on iOS. tvOS always opens its validated
-  /// app or App Store destination immediately and does not present package UI.
-  /// The presenter keeps only a weak reference to the supplied view controller.
-  ///
-  /// - Parameters:
-  ///   - configuration: Visual and behavioral options for the view.
-  ///   - presentingViewController: The controller that owns the presentation context.
-  public convenience init(
-    configuration: MoreAppsConfiguration = .default,
-    presentingViewController: UIViewController
-  ) {
-    let imageLoader = MoreAppsImageLoader.shared
-    self.init(
-      configuration: configuration,
-      opener: DefaultMoreAppsOpener.shared,
-      presenter: DefaultMoreAppsPresenter(
-        presentingViewController: presentingViewController
-      ),
-      imageLoader: imageLoader
-    )
-  }
-
   /// Creates a More Apps view with explicit testable collaborators.
   ///
   /// - Parameters:
@@ -117,7 +78,7 @@ public final class MoreAppsView: UIView {
   public convenience init(
     configuration: MoreAppsConfiguration,
     opener: any MoreAppsOpening,
-    imageLoader: MoreAppsImageLoader
+    imageLoader: any MoreAppsImageLoading
   ) {
     self.init(
       configuration: configuration,
@@ -141,7 +102,7 @@ public final class MoreAppsView: UIView {
     configuration: MoreAppsConfiguration,
     opener: any MoreAppsOpening,
     presenter: (any MoreAppsPresenting)?,
-    imageLoader: MoreAppsImageLoader
+    imageLoader: any MoreAppsImageLoading
   ) {
     self.configuration = configuration
     self.imageLoader = imageLoader
@@ -223,6 +184,12 @@ public final class MoreAppsView: UIView {
   public func reload() async {
     guard let provider else { return }
     await store.send(.load(provider)).finish()
+  }
+
+  func update(imageLoader newImageLoader: any MoreAppsImageLoading) {
+    guard imageLoader !== newImageLoader else { return }
+    imageLoader = newImageLoader
+    reconfigureCurrentItems()
   }
 
   func update(configuration newConfiguration: MoreAppsConfiguration) {

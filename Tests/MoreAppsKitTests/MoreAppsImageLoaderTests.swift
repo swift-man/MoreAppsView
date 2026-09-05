@@ -7,10 +7,13 @@
 //
 
 import Foundation
+import MoreAppsNetworking
 import Testing
 import UIKit
 
 @testable import MoreAppsKit
+@testable import MoreAppsNetworking
+@testable import MoreAppsKitCore
 
 @MainActor
 @Suite(.serialized)

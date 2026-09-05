@@ -7,9 +7,12 @@
 //
 
 import Foundation
+import MoreAppsNetworking
 import Testing
 
 @testable import MoreAppsKit
+@testable import MoreAppsNetworking
+@testable import MoreAppsKitCore
 
 @Suite(.serialized)
 struct RemoteJSONMoreAppsProviderTests {

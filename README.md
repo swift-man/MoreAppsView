@@ -31,7 +31,7 @@ package:
 dependencies: [
   .package(
     url: "https://github.com/swift-man/MoreAppsView.git",
-    from: "0.2.1"
+    from: "0.2.2"
   )
 ]
 ```
@@ -42,10 +42,39 @@ Then add `MoreAppsKit` to the consuming target and import it:
 import MoreAppsKit
 ```
 
-The package resolves compatible versions of TCA, Dependencies, and Alamofire
-transitively; the host app does not need to add those products to its own target.
+`MoreAppsKit` is the compatibility umbrella product. It includes the core UI and
+the Alamofire-backed networking implementations, so existing integrations keep
+their source and runtime behavior. Projects that do not need remote JSON or
+remote artwork can add only `MoreAppsKitCore`; projects that provide their own
+UI host can add `MoreAppsKitCore` and opt into `MoreAppsKitNetworking` separately.
+The core product has no Alamofire dependency. The package resolves compatible
+versions of TCA, Dependencies, and Alamofire transitively for the products that
+use them; the host app does not need to add those products to its own target.
 The current package version is recorded in [VERSION.txt](VERSION.txt), and shipped
 changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+The split products expose the following boundaries:
+
+- `MoreAppsKitCore`: models, TCA feature state, navigation/presentation contracts,
+  UIKit/SwiftUI views, and the `MoreAppsImageLoading` protocol. It does not
+  import Alamofire.
+- `MoreAppsKitNetworking`: `RemoteJSONMoreAppsProvider` and the
+  Alamofire-backed `MoreAppsImageLoader` implementation.
+- `MoreAppsKit`: the compatibility umbrella that re-exports both products and
+  retains the original default initializers.
+
+When using the split products directly, pass the networking loader explicitly:
+
+```swift
+import MoreAppsKitCore
+import MoreAppsNetworking
+
+let moreAppsView = MoreAppsView(
+  configuration: .default,
+  opener: DefaultMoreAppsOpener.shared,
+  imageLoader: MoreAppsImageLoader.shared
+)
+```
 
 ## Static catalog
 
@@ -370,14 +399,20 @@ not require a presenter.
 
 - `MoreApp`, `MoreAppDestination`, `MoreAppsPlatform`: Codable, hashable, sendable models.
 - `MoreAppsFilter`: explicit pure filtering for custom catalog pipelines and tests.
-- `MoreAppsProviding`, `StaticMoreAppsProvider`, `RemoteJSONMoreAppsProvider`: catalog sources.
+- `MoreAppsProviding`, `StaticMoreAppsProvider`: core catalog sources.
+- `RemoteJSONMoreAppsProvider`: Alamofire-backed catalog source in
+  `MoreAppsKitNetworking`.
 - `MoreAppsOpening`, `DefaultMoreAppsOpener`: testable system URL opening.
 - `MoreAppsPresenting`, `DefaultMoreAppsPresenter`: testable iOS StoreKit
   presentation without expanding the URL opener's responsibility.
 - `MoreAppsSelectionBehavior`: source-compatible direct opening or opt-in iOS StoreKit UI.
 - `MoreAppsConfiguration`: presentation, empty-state, and trusted deep-link options.
 - `MoreAppsImageLoader`: Alamofire HTTP loading, MIME validation, request coalescing,
-  size-aware background decoding, and memory caching.
+  size-aware background decoding, and memory caching in `MoreAppsKitNetworking`.
+- `MoreAppsImageLoading`: the core image-loading boundary used by UIKit and
+  SwiftUI views without coupling them to Alamofire.
+- `MoreAppsKitNetworking`: the optional Alamofire-backed product containing remote
+  catalog and artwork implementations.
 - `MoreAppsFocusedBackgroundView`: optional host-owned full-screen focus artwork.
 - `MoreAppsView`: UIKit entry point with `setApps`, `load`, `reload`, `onEvent`, and
   focus-background synchronization.
@@ -396,11 +431,13 @@ caller but are not cached.
 | Area | Responsibility |
 | --- | --- |
 | `Models` | Codable metadata, platform destinations, events, pure filtering |
-| `Data` | Provider protocol/client, static provider, Alamofire remote provider |
+| `Data` | Provider protocol/client and static provider |
+| `MoreAppsKitNetworking/Data` | Alamofire remote JSON provider and response validation |
 | `Navigation` | URL-opening protocol, live `UIApplication` implementation, dependency key |
 | `Presentation` | iOS StoreKit overlay and presenter dependency key |
 | `Feature` | TCA state, actions, effects, host environment dependency |
-| `ImageLoading` | Alamofire image bytes, MIME checks, in-flight sharing, memory caches |
+| `ImageLoading` | Core image-loading protocol; Alamofire implementation is in `MoreAppsKitNetworking` |
+| `MoreAppsKitNetworking/ImageLoading` | Alamofire image bytes, MIME checks, in-flight sharing, memory caches |
 | `UI` | Configuration, reusable card cell, diffable UIKit view, SwiftUI wrapper |
 | `Resources` | English and Korean string catalog |
 | `Tests` | Swift Testing suites for filters, reducer effects, providers, and empty UI |

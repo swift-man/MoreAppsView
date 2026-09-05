@@ -10,6 +10,7 @@ import Foundation
 import Testing
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 enum TestFixtures {
   static let iOSStoreURL = URL(string: "https://apps.apple.com/app/id100")!

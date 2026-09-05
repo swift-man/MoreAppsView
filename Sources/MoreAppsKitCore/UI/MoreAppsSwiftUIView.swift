@@ -16,6 +16,7 @@
     private let configuration: MoreAppsConfiguration
     private let presenter: (any MoreAppsPresenting)?
     private let onEvent: ((MoreAppsEvent) -> Void)?
+    private let imageLoader: any MoreAppsImageLoading
 
     /// Creates a SwiftUI More Apps view backed by `UICollectionView`.
     ///
@@ -28,12 +29,14 @@
       apps: [MoreApp],
       configuration: MoreAppsConfiguration = .default,
       presenter: (any MoreAppsPresenting)? = nil,
-      onEvent: ((MoreAppsEvent) -> Void)? = nil
+      onEvent: ((MoreAppsEvent) -> Void)? = nil,
+      imageLoader: any MoreAppsImageLoading
     ) {
       self.apps = apps
       self.configuration = configuration
       self.presenter = presenter
       self.onEvent = onEvent
+      self.imageLoader = imageLoader
     }
 
     /// State retained across SwiftUI updates to avoid resetting impressions.
@@ -41,6 +44,7 @@
     public final class Coordinator {
       fileprivate var apps: [MoreApp] = []
       fileprivate var configuration: MoreAppsConfiguration?
+      fileprivate var imageLoader: (any MoreAppsImageLoading)?
       fileprivate let presentationRelay = MoreAppsPresentationRelay()
 
       /// Creates an empty wrapper coordinator.
@@ -59,12 +63,13 @@
         configuration: configuration,
         opener: DefaultMoreAppsOpener.shared,
         presenter: context.coordinator.presentationRelay,
-        imageLoader: .shared
+        imageLoader: imageLoader
       )
       view.onEvent = onEvent
       view.setApps(apps)
       context.coordinator.apps = apps
       context.coordinator.configuration = configuration
+      context.coordinator.imageLoader = imageLoader
       return view
     }
 
@@ -75,6 +80,11 @@
     ) {
       uiView.onEvent = onEvent
       context.coordinator.presentationRelay.presenter = presenter
+
+      if context.coordinator.imageLoader !== imageLoader {
+        context.coordinator.imageLoader = imageLoader
+        uiView.update(imageLoader: imageLoader)
+      }
 
       if context.coordinator.configuration != configuration {
         context.coordinator.configuration = configuration

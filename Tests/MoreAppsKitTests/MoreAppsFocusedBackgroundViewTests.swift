@@ -10,6 +10,7 @@ import Testing
 import UIKit
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 @MainActor
 @Suite(.serialized)

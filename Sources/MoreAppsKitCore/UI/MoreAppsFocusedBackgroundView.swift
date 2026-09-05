@@ -9,6 +9,11 @@
 import UIKit
 
 private let moreAppsDefaultDimmingAlpha: CGFloat = 0.46
+private let moreAppsMaximumDecodedPixelSize = 4_096
+
+private func moreAppsClampedDecodedPixelSize(_ pixelSize: Int) -> Int {
+  min(max(1, pixelSize), moreAppsMaximumDecodedPixelSize)
+}
 
 private func moreAppsNormalizedDimmingAlpha(_ value: CGFloat) -> CGFloat {
   guard value.isFinite else { return moreAppsDefaultDimmingAlpha }
@@ -79,36 +84,16 @@ public final class MoreAppsFocusedBackgroundView: UIView {
     }
   }
 
-  /// Creates a focus-synchronized background view.
-  ///
-  /// - Parameters:
-  ///   - maximumPixelSize: The requested maximum decoded image dimension.
-  ///     Values are clamped to `1...4096`.
-  ///   - dimmingAlpha: The opacity of the black foreground-legibility overlay.
-  ///   - transitionDuration: The crossfade duration when Reduce Motion is off.
-  public convenience init(
-    maximumPixelSize: Int = 1_920,
-    dimmingAlpha: CGFloat = 0.46,
-    transitionDuration: TimeInterval = 0.35
-  ) {
-    self.init(
-      imageLoader: MoreAppsImageLoader.shared,
-      maximumPixelSize: maximumPixelSize,
-      dimmingAlpha: dimmingAlpha,
-      transitionDuration: transitionDuration
-    )
-  }
-
   /// Creates a focus-synchronized background view with an explicit loader.
   ///
   /// - Parameters:
-  ///   - imageLoader: The Alamofire-backed loader used for artwork.
+  ///   - imageLoader: The artwork loader used for artwork.
   ///   - maximumPixelSize: The requested maximum decoded image dimension.
   ///     Values are clamped to `1...4096`.
   ///   - dimmingAlpha: The opacity of the black foreground-legibility overlay.
   ///   - transitionDuration: The crossfade duration when Reduce Motion is off.
   public convenience init(
-    imageLoader: MoreAppsImageLoader,
+    imageLoader: any MoreAppsImageLoading,
     maximumPixelSize: Int = 1_920,
     dimmingAlpha: CGFloat = 0.46,
     transitionDuration: TimeInterval = 0.35

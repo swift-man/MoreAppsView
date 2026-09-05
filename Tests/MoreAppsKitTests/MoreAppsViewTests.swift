@@ -6,10 +6,12 @@
 //  Copyright © 2026 MoreAppsKit. All rights reserved.
 //
 
+import MoreAppsNetworking
 import Testing
 import UIKit
 
 @testable import MoreAppsKit
+@testable import MoreAppsKitCore
 
 @MainActor
 @Suite(.serialized)
@@ -295,6 +297,46 @@ struct MoreAppsViewTests {
   }
 
   @Test
+  func testUpdatingImageLoaderReconfiguresVisibleCards() async {
+    let initialLoader = ImageLoaderProbe()
+    let replacementLoader = ImageLoaderProbe()
+    let iconURL = URL(string: "https://example.com/icon.png")!
+    let app = MoreApp(
+      id: "image",
+      bundleIdentifier: "com.example.image",
+      name: "Image",
+      iconURL: iconURL,
+      destinations: [
+        MoreAppDestination(
+          platform: .iOS,
+          appStoreURL: TestFixtures.iOSStoreURL
+        )
+      ],
+      sortOrder: 0
+    )
+    let view = MoreAppsView(
+      configuration: .default,
+      opener: DefaultMoreAppsOpener.shared,
+      imageLoader: initialLoader
+    )
+    view.frame = CGRect(x: 0, y: 0, width: 1_024, height: 220)
+    view.setApps([app])
+
+    for _ in 0..<3 {
+      view.setNeedsLayout()
+      view.layoutIfNeeded()
+      await Task.yield()
+    }
+    await initialLoader.waitForRequest()
+
+    view.update(imageLoader: replacementLoader)
+    await replacementLoader.waitForRequest()
+
+    #expect(initialLoader.requestedURLs == [iconURL])
+    #expect(replacementLoader.requestedURLs == [iconURL])
+  }
+
+  @Test
   func testVisibleViewHidesAfterCatalogBecomesEmpty() async {
     let view = MoreAppsView(
       configuration: .init(hidesWhenEmpty: true)
@@ -350,7 +392,7 @@ struct MoreAppsViewTests {
     cell.configure(
       with: TestFixtures.app(),
       configuration: .default,
-      imageLoader: .shared
+      imageLoader: MoreAppsImageLoader.shared
     )
 
     #expect(cell.isAccessibilityElement)
@@ -366,7 +408,7 @@ struct MoreAppsViewTests {
     cell.configure(
       with: TestFixtures.app(),
       configuration: .init(selectionBehavior: .platformPresentation),
-      imageLoader: .shared
+      imageLoader: MoreAppsImageLoader.shared
     )
 
     #if os(iOS)
@@ -532,6 +574,29 @@ private actor CountingProvider: MoreAppsProviding {
   func fetchApps() async throws -> [MoreApp] {
     count += 1
     return apps
+  }
+}
+
+@MainActor
+private final class ImageLoaderProbe: MoreAppsImageLoading {
+  private let didRequest = AsyncTestSignal()
+  private(set) var requestedURLs: [URL] = []
+
+  func image(for url: URL) async throws -> UIImage {
+    requestedURLs.append(url)
+    didRequest.signal()
+    return UIImage(systemName: "app")!
+  }
+
+  func image(
+    for url: URL,
+    maximumPixelSize: Int
+  ) async throws -> UIImage {
+    try await image(for: url)
+  }
+
+  func waitForRequest() async {
+    await didRequest.wait()
   }
 }
 
