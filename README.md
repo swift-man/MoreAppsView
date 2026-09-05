@@ -31,7 +31,7 @@ package:
 dependencies: [
   .package(
     url: "https://github.com/swift-man/MoreAppsView.git",
-    from: "0.2.2"
+    from: "0.2.3"
   )
 ]
 ```
