@@ -149,14 +149,6 @@ struct MoreAppsFeature: Reducer {
           do {
             let apps = try await provider.fetchApps()
             await send(.loadSucceeded(id: loadID, apps: apps))
-          } catch let error as CancellationError {
-            guard !Task.isCancelled else { return }
-            await send(
-              .loadFailed(
-                id: loadID,
-                message: error.localizedDescription
-              )
-            )
           } catch {
             // URLSession and third-party clients may surface cancellation as a
             // regular error (for example, URLError.cancelled). Do not turn a
