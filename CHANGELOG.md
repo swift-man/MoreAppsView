@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3] - 2026-09-05
+
+### Changed
+
+- Keep App Store identifier validation in a dedicated component parser with named ASCII digit boundaries while preserving conservative rejection of ambiguous paths.
+- Route cancellation errors through the same cancellation-aware catalog failure path, removing duplicate reducer handling without changing user-visible behavior.
+
 ## [0.2.2] - 2026-09-05
 
 ### Added
