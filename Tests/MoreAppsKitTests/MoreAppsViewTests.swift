@@ -308,7 +308,7 @@ struct MoreAppsViewTests {
       iconURL: iconURL,
       destinations: [
         MoreAppDestination(
-          platform: .iOS,
+          platform: .current,
           appStoreURL: TestFixtures.iOSStoreURL
         )
       ],

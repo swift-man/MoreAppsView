@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.4] - 2026-09-11
+
+### Added
+
+- Add Answer by Chance:Ask & Reflect to the remote JSON sample catalog with
+  verified app metadata, artwork, and an iOS-only App Store destination.
+- Omit the unverified deep link so selection uses the existing App Store policy.
+
+### Fixed
+
+- Use the current platform in the visible-card image-loader replacement test so
+  the fixture remains eligible on both iOS and tvOS.
+
 ## [0.2.3] - 2026-09-05
 
 ### Changed
