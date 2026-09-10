@@ -49,5 +49,19 @@
       }
     ],
     "sortOrder": 30
+  },
+  {
+    "id": "answer-by-chance",
+    "bundleIdentifier": "me.gorani.AnswerByChance",
+    "name": "Answer by Chance:Ask & Reflect",
+    "subtitle": "Ask a question and turn the page",
+    "iconURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/2b/62/f5/2b62f583-8b36-71f8-688b-79f1202b9319/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg",
+    "destinations": [
+      {
+        "platform": "iOS",
+        "appStoreURL": "https://apps.apple.com/us/app/answer-by-chance-ask-reflect/id6784938737"
+      }
+    ],
+    "sortOrder": 40
   }
 ]
