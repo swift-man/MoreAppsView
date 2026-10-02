@@ -1241,10 +1241,11 @@ struct MoreAppsFeatureTests {
     }
 
     await store.send(
-      .load(.init {
-        try await Task.sleep(nanoseconds: 60_000_000_000)
-        return []
-      })
+      .load(
+        .init {
+          try await Task.sleep(nanoseconds: 60_000_000_000)
+          return []
+        })
     ) {
       $0.isLoading = true
       $0.nextLoadID = 1
