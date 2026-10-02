@@ -256,6 +256,17 @@ Each background-view instance has exclusive ownership: assign it to only one liv
 `MoreAppsView` at a time. A new owner retries its first request even when the prior
 owner used the same app, artwork URL, and catalog revision.
 
+When `backgroundImageURL` is omitted, focus artwork falls back to the package's
+fixed first App Store screenshot catalog in `Resources/DefaultBackgrounds.json`.
+The initial default is Andromeda 17K on tvOS. An explicit destination URL always
+overrides this default; unknown apps or platforms without a destination have no
+fallback. No App Store metadata lookup is performed. Use
+`MoreApp.resolvedBackgroundImageURL(for:)` to inspect the effective URL.
+Omitting an image URL opts into defaults; there is no per-app disable flag.
+To disable all focused backgrounds, leave `MoreAppsView.focusedBackgroundView` unassigned.
+This catalog applies to focus artwork only; presentation requests preserve the
+destination's explicitly supplied image URL.
+
 Selecting a card immediately tries the validated deep link. If the system accepts
 it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
 URL to the system App Store app. No intermediate popup or package-owned preview is
@@ -302,6 +313,7 @@ The optional `backgroundImageURL` belongs to each platform destination. The buil
 focus-background synchronization reads it from the matching tvOS destination, and
 older catalogs that omit it continue to decode. The JSON schema is demonstrated in
 [Samples/RemoteJSON/more-apps.json](Samples/RemoteJSON/more-apps.json).
+Omitted artwork also uses the same registered default screenshot fallback.
 An unknown platform string fails decoding instead of accidentally exposing an app
 on the wrong platform.
 
@@ -439,7 +451,7 @@ caller but are not cached.
 | `ImageLoading` | Core image-loading protocol; Alamofire implementation is in `MoreAppsKitNetworking` |
 | `MoreAppsKitNetworking/ImageLoading` | Alamofire image bytes, MIME checks, in-flight sharing, memory caches |
 | `UI` | Configuration, reusable card cell, diffable UIKit view, SwiftUI wrapper |
-| `Resources` | English and Korean string catalog |
+| `Resources` | English and Korean string catalog, fixed first-screenshot `DefaultBackgrounds.json` |
 | `Tests` | Swift Testing suites for filters, reducer effects, providers, and empty UI |
 
 ## Validation

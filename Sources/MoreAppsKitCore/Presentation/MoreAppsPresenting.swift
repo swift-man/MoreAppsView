@@ -15,6 +15,9 @@ public struct MoreAppsPresentationRequest: Equatable, Sendable {
   public let app: MoreApp
 
   /// The platform-specific destination being presented.
+  ///
+  /// Its artwork remains the explicit destination value. Bundled screenshot
+  /// defaults apply only to focus artwork, not to App Store presentation.
   public let destination: MoreAppDestination
 
   /// The numeric App Store identifier used by the system presentation UI.

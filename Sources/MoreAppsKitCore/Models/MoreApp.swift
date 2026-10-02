@@ -68,4 +68,17 @@ public struct MoreApp: Identifiable, Codable, Hashable, Sendable {
   ) -> MoreAppDestination? {
     destinations.first { $0.platform == platform }
   }
+
+  /// Returns custom focus artwork, falling back to the package's first-screenshot catalog.
+  ///
+  /// - Parameter platform: The destination platform whose artwork is needed.
+  /// - Returns: The destination's explicit URL first, then registered default artwork.
+  ///   Returns `nil` if no matching destination or catalog artwork exists.
+  ///   Omitting a custom URL opts into registered defaults; there is no per-app disable flag.
+  public func resolvedBackgroundImageURL(for platform: MoreAppsPlatform) -> URL? {
+    guard let destination = destination(for: platform) else { return nil }
+    return destination.backgroundImageURL
+      ?? MoreAppsDefaultBackgroundCatalog.imageURL(
+        bundleIdentifier: bundleIdentifier, platform: platform)
+  }
 }

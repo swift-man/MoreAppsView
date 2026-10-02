@@ -427,10 +427,7 @@ struct MoreAppsFeature: Reducer {
     }
 
     state.focusedAppID = appID
-    state.focusedBackgroundImageURL =
-      app
-      .destination(for: environment.platform)?
-      .backgroundImageURL
+    state.focusedBackgroundImageURL = app.resolvedBackgroundImageURL(for: environment.platform)
   }
 
   private func deepLinkOpenEffect(
