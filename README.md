@@ -256,6 +256,13 @@ Each background-view instance has exclusive ownership: assign it to only one liv
 `MoreAppsView` at a time. A new owner retries its first request even when the prior
 owner used the same app, artwork URL, and catalog revision.
 
+When `backgroundImageURL` is omitted, focus artwork falls back to the package's
+fixed first App Store screenshot catalog in `Resources/DefaultBackgrounds.json`.
+The initial default is Andromeda 17K on tvOS. An explicit destination URL always
+overrides this default; unknown apps or platforms without a destination have no
+fallback. No App Store metadata lookup is performed. Use
+`MoreApp.resolvedBackgroundImageURL(for:)` to inspect the effective URL.
+
 Selecting a card immediately tries the validated deep link. If the system accepts
 it, the installed app opens; otherwise MoreAppsKit hands the validated App Store
 URL to the system App Store app. No intermediate popup or package-owned preview is
