@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Register Andromeda 17K's first tvOS App Store screenshot as default focus artwork.
+- Resolve explicit destination artwork before the bundled default catalog through
+  `MoreApp.resolvedBackgroundImageURL(for:)`.
+- Validate catalog platform keys and surface bundled resource failures in debug builds.
+
 ## [0.2.4] - 2026-09-11
 
 ### Added

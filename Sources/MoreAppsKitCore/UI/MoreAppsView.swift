@@ -32,8 +32,8 @@ public final class MoreAppsView: UIView {
   ///
   /// Place the background view behind the host interface before assigning it.
   /// MoreAppsView keeps only a weak reference and synchronizes tvOS Focus Engine
-  /// changes with the current destination's
-  /// ``MoreAppDestination/backgroundImageURL``.
+  /// changes with ``MoreApp/resolvedBackgroundImageURL(for:)``, using explicit
+  /// destination artwork before registered default screenshots.
   /// Do not share one background view between multiple live MoreAppsView
   /// instances; ownership is exclusive and the most recent assignment wins.
   public weak var focusedBackgroundView: MoreAppsFocusedBackgroundView? {

@@ -30,9 +30,9 @@ private func moreAppsNormalizedTransitionDuration(
 /// A full-screen image view synchronized with the focused tvOS ``MoreAppsView`` card.
 ///
 /// Add this view behind the rest of a host's interface and assign it to
-/// ``MoreAppsView/focusedBackgroundView``. Artwork is loaded only when the
-/// focused app's current-platform destination supplies a
-/// ``MoreAppDestination/backgroundImageURL``. Stale work is cancelled when
+/// ``MoreAppsView/focusedBackgroundView``. Artwork uses the focused app's
+/// ``MoreApp/resolvedBackgroundImageURL(for:)``: an explicit destination URL
+/// takes precedence over registered default screenshots. Stale work is cancelled when
 /// focus changes, and transitions honor Reduce Motion.
 /// Assign each instance to at most one live ``MoreAppsView`` at a time.
 @MainActor

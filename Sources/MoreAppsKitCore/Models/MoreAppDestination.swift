@@ -24,6 +24,9 @@ public struct MoreAppDestination: Codable, Hashable, Sendable {
   /// On tvOS, ``MoreAppsView`` can render this image with
   /// ``MoreAppsFocusedBackgroundView``. The value remains platform-specific so
   /// shared catalogs can keep artwork associated with the matching destination.
+  /// An explicit value overrides registered default screenshots. A `nil` value
+  /// allows ``MoreApp/resolvedBackgroundImageURL(for:)`` to use the default catalog;
+  /// it does not disable default artwork.
   public let backgroundImageURL: URL?
 
   /// Creates a platform-specific destination.

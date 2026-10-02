@@ -16,6 +16,10 @@
   이미지 UI 처리까지 Alamofire 경계를 확장하지 않는다.
 - 비공개 API, 특정 앱 목록, 고정 App Store URL, 분석 SDK, 호스트 `Info.plist`
   변경 요구를 패키지에 포함하지 않는다.
+- 사용자 요청에 따른 기본 포커스 배경의 예외로, 첫 App Store 스크린샷 URL은
+  `Sources/MoreAppsKitCore/Resources/DefaultBackgrounds.json`에만 등록할 수 있다.
+  UI/리듀서의 특정 앱 분기나 앱 열기 URL 목록은 추가하지 않으며,
+  호스트의 명시적인 `backgroundImageURL`이 기본값보다 우선한다.
 - 공개 API는 용도가 분명한 최소 표면만 유지하고 모든 public 선언에 DocC
   문서 주석을 작성한다.
 
